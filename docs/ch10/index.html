@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Incidenten · BIO2 in beeld</title>
+<link rel="stylesheet" href="../lib/engine.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2314171a'/%3E%3Cpath d='M15 52V38M27 52V20M39 52V32M51 52V14' stroke='%238d959d' stroke-width='7'/%3E%3Cpath d='M7 28H57' stroke='%23c9a45c' stroke-width='4'/%3E%3C/svg%3E">
+<link rel="expect" href="#bar" blocking="render"><!-- hold the first frame until the player exists, so the page transition can run -->
+</head>
+<body>
+<script src="../lib/engine.js"></script>
+<script src="audio/nl/timings.js"></script>
+<script>
+'use strict';
+// Hoofdstuk 10: de overheidsmaatregelen 5.24.01 tot en met 5.28.01 van de BIO2 (pagina 19 tot en met 21): het meldloket,
+// de proceseigenaar, de incidentprocedure, meldingen van buiten, afdoen, leren en bewaren.
+// Beat ids match content/bio2/ch10/narration.nl.json. One idea per beat. An incident is a red box throughout.
+const CHAPTER = { number: 10, title: 'Incidenten: melden, oplossen, leren', minutes: 6, language: 'nl', next: '../ch11/' };
+
+/* ---------- chapter data (used by the helpers and inside BEATS, so defined first) ---------- */
+const C10_TABS = ['5.24', '5.25', '5.26', '5.27', '5.28'];
+// Five controls of ISO 27002 (topics shortened, in our own words) with their government measures in the BIO2.
+const C10_CTRL = [
+  { code: '5.24', topic: ['incidentbeheer', 'voorbereiden'], nrs: ['5.24.01', '5.24.02', '5.24.03', '5.24.04', '5.24.05', '5.24.07', '5.24.08'], note: ['5.24.06 verplaatst', 'naar 5.21.05'] },
+  { code: '5.25', topic: ['gebeurtenissen', 'beoordelen'], nrs: [], note: ['5.25.01 verplaatst', 'naar 5.26.02'] },
+  { code: '5.26', topic: ['reageren op', 'incidenten'], nrs: ['5.26.02'], note: ['5.26.01 verplaatst', 'naar 5.25.02'] },
+  { code: '5.27', topic: ['leren van', 'incidenten'], nrs: ['5.27.01', '5.27.02'] },
+  { code: '5.28', topic: ['bewijsmateriaal', 'verzamelen'], nrs: ['5.28.01'] },
+];
+// Four parties as cards for the first quick check: [icon, label].
+const C10_Q1 = [['proc', ['het meldloket']], ['persoon', ['de proceseigenaar']], ['overheid', ['de eindverantwoordelijke', 'voor de bedrijfsvoering']], ['schild', ['het CSIRT']]];
+// The four controls that have government measures, as cards for the second quick check: [number, icon, label].
+const C10_Q2 = [['5.24', 'proc', ['melden en', 'voorbereiden']], ['5.26', 'schild', ['reageren']], ['5.27', 'loep', ['leren']], ['5.28', 'db', ['bewaren']]];
+const c10_qX = i => 146 + i * 336;
+
+/* ---------- chapter drawing helpers (prefixed c10_; the shared b_ helpers live in ../lib/engine.js) ---------- */
+// An incident: a red box with its top left at (x,y). Returns the group, hidden.
+const c10_inc = (p, x, y, w = 220, str = 'incident') => b_box(p, x, y, w, [str], { col: COL.bad, fill: COL.bad, hgt: 70, size: 24 });
+// The time line of three years (b_years) started here and moved to the engine when chapter 11 needed it.
+
+/* ---------- beats: [id, title, run(m, D), { ask, hold }?] ---------- */
+const BEATS = [
+  ['intro', 'Incidenten', (m, D) =>
+    b_title(m, D, 'DEEL B · MAATREGELEN VOOR DE ORGANISATIE · HOOFDSTUK 10', 'Incidenten', 'Melden, oplossen, leren en bewaren.')],
+
+  ['vijf', '5.24 tot en met 5.28', (m) => {
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 5.24 TOT EN MET 5.28');
+    // The strip of this chapter: the five controls. The one without a government measure gets a dashed frame.
+    b_tabs(C10_TABS, .4);
+    C10_CTRL.forEach((c, i) => { if (!c.nrs.length) b_tabNone(i); });
+    const tV = m('vier'), tE = m('een');
+    let withNr = 0;
+    C10_CTRL.forEach((c, i) => {
+      const x = 120 + i * 276, y = 216, g = G(p, { o: 0, y: 12 }), t0 = c.nrs.length ? tV + .2 + withNr++ * .25 : tE + .2;
+      b_rect(g, x, y, 260, 400, { fill: COL.panel });
+      T(g, c.code, { x: x + 20, y: y + 52, size: 34, fill: COL.iso, weight: 700, font: MONO });
+      c.topic.forEach((str, k) => T(g, str, { x: x + 20, y: y + 92 + k * 27, size: 20 }));
+      tw(g, { o: 1, y: 0 }, .3 + i * .1, .5, out);
+      c.nrs.forEach((nr, k) => show(b_chip(g, x + 20 + (k % 2) * 114, y + 156 + Math.floor(k / 2) * 48, 106, nr, { col: COL.task, fill: COL.task, hgt: 38, size: 16 }), t0 + k * .06));
+      if (!c.nrs.length) {
+        show(T(g, 'geen overheidsmaatregel', { x: x + 20, y: y + 176, size: 15, fill: COL.dim, font: MONO, o: 0 }), t0);
+        show(b_chip(g, x + 20, y + 194, 220, 'richtlijn ISO 27002', { col: COL.iso, fill: COL.iso, hgt: 38, size: 16 }), t0 + 1.4);
+      }
+      if (c.note) c.note.forEach((str, k) => show(T(g, str, { x: x + 20, y: y + 360 + k * 19, size: 14, fill: COL.dim, font: MONO, o: 0 }), t0 + .6));
+    });
+    b_txt(p, 'BRON ONDERWERPEN: NEN-EN-ISO/IEC 27002:2022 · VERKORT WEERGEGEVEN', 120, 650, 1.6, { size: 14, fill: COL.faint, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    b_txt(p, 'samen elf overheidsmaatregelen', 800, 716, tV + 1.6, { size: 27, weight: 600, fill: COL.task });
+  }],
+
+  ['meldloket', 'Het meldloket', (m) => {
+    const p = panel(0);
+    S.hd = b_head(p, '5.24.01 · MELDLOKET');
+    b_tab(0, .2);
+    S.kop = b_kop(p, '5.24.01', 'een meldloket voor incidenten');
+    const tL = m('loket'), tA = m('alle'), tR = m('reg');
+    // The desk, and under it the register of what was reported.
+    const desk = G(p, { o: 0, y: 14 });
+    b_rect(desk, 860, 250, 600, 116, { fill: COL.panel, stroke: COL.task, sw: 3 });
+    T(desk, 'meldloket', { x: 890, y: 304, size: 32, weight: 600, fill: COL.task });
+    T(desk, 'voor informatiebeveiligingsincidenten', { x: 890, y: 340, size: 20, fill: COL.dim });
+    b_rise(desk, tL);
+    const reg = b_sheet(p, 860, 392, 600, 290, 'REGISTRATIE');
+    b_caps(reg, 'SCHEMATISCH', 1432, 432, { fill: COL.faint, anchor: 'end' });
+    b_rise(reg, tL + .6);
+    // Everyone can reach it: employees inside the organisation and from outside it.
+    const who = S.who = G(p);
+    [[[200, 320, 440], 330, 'interne medewerkers'], [[260, 380], 540, 'externe medewerkers']].forEach(([xs, y, str], r) => {
+      const g = G(who, { o: 0 });
+      xs.forEach(x => b_icon(g, 'persoon', { x, y, s: 1.2 }));
+      T(g, str, { x: 320, y: y + 82, size: 23, weight: 600, anchor: 'middle' });
+      show(g, tA + r * 1.4);
+      show(b_dart(who, 520, y, 846, 300 + r * 20), tA + .5 + r * 1.4);
+    });
+    b_txt(who, 'toegankelijk voor alle medewerkers', 320, 692, tA + .4, { size: 22, weight: 600, fill: COL.task });
+    // Two incidents are reported, and registered.
+    [[320, 268], [320, 478]].forEach(([x0, y0], k) => {
+      const x = 888, y = 458 + k * 100, t0 = tR + k * 1.3;
+      const g = put(b_box(p, x, y, 180, ['incident'], { col: COL.bad, fill: COL.bad, hgt: 56, size: 21 }), { x: x0 - x - 90, y: y0 - y });
+      show(g, t0, .3); tw(g, { x: 0, y: 0 }, t0 + .2, 1, io);
+      const done = G(p, { o: 0 });
+      b_tick(done, 1104, y + 28);
+      T(done, 'gemeld en geregistreerd', { x: 1132, y: y + 36, size: 21 });
+      show(done, t0 + 1.3);
+    });
+  }],
+
+  ['procedure', 'De meldprocedure', (m) => {
+    // Same picture: the employees make way for the procedure that describes what the desk does.
+    const p = S.panel, tT = m('taken');
+    hide(S.who, 0, .4); hide(S.kop, 0, .3); hide(S.hd, 0, .3);
+    b_head(p, '5.24.02 · MELDPROCEDURE', .3);
+    b_kop(p, '5.24.02', 'een meldprocedure', .3);
+    b_rise(b_sheet(p, 140, 270, 560, 340, 'MELDPROCEDURE', 2), .5);
+    b_arrow(p, 714, 846, 308, tT);
+    b_txt(p, 'beschrijft', 780, 288, tT, { size: 20, fill: COL.dim });
+    show(b_box(p, 168, 400, 504, ['taken van het meldloket'], { col: COL.task, fill: COL.task, hgt: 62 }), tT);
+    show(b_box(p, 168, 480, 504, ['verantwoordelijkheden van het meldloket'], { col: COL.task, fill: COL.task, hgt: 62, size: 22 }), tT + 1.2);
+  }],
+
+  ['oplossen', 'Oplossen', (m) => {
+    const p = panel(0);
+    S.hd = b_head(p, '5.24.03 · INCIDENTEN OPLOSSEN');
+    S.kop = b_kop(p, '5.24.03', 'wie zorgt voor het oplossen');
+    const tP = m('pe');
+    show(c10_inc(p, 150, 296), .3);
+    // The process owner is responsible for getting it resolved.
+    b_arrow(p, 384, 530, 331, tP);
+    show(b_role(p, 610, 331, 'proceseigenaar', COL.task), tP + .2);
+    b_txt(p, 'verantwoordelijk voor het oplossen', 610, 448, tP + .5, { size: 21, weight: 600, fill: COL.task });
+    b_arrow(p, 690, 846, 331, tP + 1.5);
+    show(b_box(p, 860, 296, 240, ['opgelost'], { col: COL.good, fill: COL.good, hgt: 70, size: 24 }), tP + 1.8);
+  }],
+
+  ['maandelijks', 'Maandelijks rapporteren', (m) => {
+    // Same picture: the process owner also reports, every month, to the one who answers for the operations.
+    const p = S.panel, tM = m('maand'), tA = m('aan'), cx = 610, cy = 628, R = 78;
+    hide(S.kop, 0, .3); hide(S.hd, 0, .3);
+    b_head(p, '5.24.04 · MAANDELIJKS RAPPORTEREN', .3);
+    b_kop(p, '5.24.04', 'elke maand rapporteren', .3);
+    b_down(p, cx, 468, cy - R - 16, tM, COL.task);
+    const ring = b_year(p, cx, cy, R, '');
+    T(ring, 'elke maand', { x: cx, y: cy + 7, size: 19, fill: COL.task, weight: 600, anchor: 'middle' });
+    show(ring, tM);
+    for (let k = 0; k < 12; k++) {
+      const a = k * Math.PI / 6;
+      show(put(mk('circle', { cx: cx + R * Math.sin(a), cy: cy - R * Math.cos(a), r: 7, fill: COL.task }, p), { o: 0 }), tM + .4 + k * .17, .2);
+    }
+    b_arrow(p, 716, 1180, cy, tA);
+    b_txt(p, 'de opvolging van incidenten', 948, cy - 22, tM + 1.6, { size: 21, weight: 600 });
+    const boss = b_role(p, 1280, cy, 'eindverantwoordelijke');
+    T(boss, 'voor de bedrijfsvoering', { x: 1280, y: cy + 112, size: 20, weight: 600, anchor: 'middle' });
+    show(boss, tA + .3);
+  }],
+
+  ['crisis', 'Crisisbeheersing', (m) => {
+    const p = panel(0);
+    b_head(p, '5.24.05 · CRISISBEHEERSING');
+    b_kop(p, '5.24.05', 'verwijzing naar crisisbeheersing');
+    const tV = m('verw');
+    b_rise(b_sheet(p, 140, 260, 580, 400, 'PROCEDURE INFORMATIEBEVEILIGINGSINCIDENTEN', 3), .3);
+    b_rise(b_sheet(p, 900, 260, 560, 400, 'PROCEDURE CRISISBEHEERSING', 3), .6);
+    // One procedure points to the other.
+    show(b_box(p, 168, 440, 524, ['zie: procedure voor crisisbeheersing'], { col: COL.task, fill: COL.task }), tV);
+    b_arrow(p, 706, 886, 472, tV + .6, { stroke: COL.task });
+    b_txt(p, 'verwijzing', 796, 450, tV + .6, { size: 21, weight: 600, fill: COL.task });
+  }],
+
+  ['csirt', 'De incidentprocedure', (m) => {
+    const p = panel(0);
+    b_head(p, '5.24.07 · DE INCIDENTPROCEDURE');
+    b_kop(p, '5.24.07', 'wat de incidentprocedure ten minste bevat');
+    const ys = [322, 468, 628];
+    // Three things, numbered; each appears on its sentence.
+    const row = (k, main, subs, t0) => {
+      const y = ys[k], g = G(p, { o: 0 });
+      b_num(g, k + 1, 120, y - 24);
+      T(g, main, { x: 190, y: y + 2, size: 24, weight: 600 });
+      subs.forEach((str, n) => T(g, str, { x: 190, y: y + 32 + n * 25, size: 19, fill: COL.dim }));
+      show(g, t0);
+    };
+    row(0, 'incidenten gemeld bij het CSIRT', ['binnen de wettelijke termijn'], m('c1'));
+    row(1, 'meldingen van het CSIRT', ['ontvangen, beoordeeld en opgenomen', 'in de risicobehandeling'], m('c2'));
+    row(2, 'betrokkenen op de hoogte gesteld', ['binnen de wettelijke termijn'], m('c3'));
+    // The team on the other side of the first two: reports go there, and notices come back.
+    const team = G(p, { o: 0, y: 14 });
+    b_rect(team, 900, 262, 580, 262, { fill: COL.panel, stroke: COL.dim });
+    T(team, 'CSIRT', { x: 928, y: 322, size: 34, weight: 700, font: MONO });
+    b_term(team, 'Cyber Security Incident Response Team', 'csirt', { x: 928, y: 372, size: 21, o: 1 });
+    T(team, 'responsteam voor', { x: 928, y: 420, size: 19, fill: COL.dim });
+    T(team, 'cyberbeveiligingsincidenten', { x: 928, y: 446, size: 19, fill: COL.dim });
+    b_rise(team, m('c1'));
+    b_arrow(p, 640, 884, ys[0], m('c1') + .6, { stroke: COL.task });
+    b_arrow(p, 884, 640, ys[1], m('c2') + .3, { stroke: COL.task });
+    // Those involved hear of it too.
+    const inv = G(p, { o: 0 });
+    [960, 1050, 1140].forEach(x => b_icon(inv, 'persoon', { x, y: ys[2], s: 1 }));
+    T(inv, 'betrokkenen', { x: 1206, y: ys[2] + 8, size: 23, weight: 600 });
+    show(inv, m('c3') + .2);
+    b_arrow(p, 640, 904, ys[2], m('c3') + .5, { stroke: COL.task });
+  }, { hold: true }],   // the lesson waits here: the English term can be heard before it goes on
+
+  ['q1', 'Controlevraag', () => {
+    // Four parties as cards to point at.
+    const p = panel(0);
+    b_head(p, '5.24 · MELDEN EN OPLOSSEN');
+    b_txt(p, 'wie doet wat bij een incident', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.cards = C10_Q1.map(([icon, lines], i) => {
+      const g = b_tile(p, { x: c10_qX(i), y: 264, w: 300, h: 250, icon, lines, iconY: 96, iconS: 1.1, size: 21, textY: 452 });   // textY: clear of the tall 'overheid' icon
+      b_rise(g, .3 + i * .1);
+      return g;
+    });
+  }, { ask: done => {
+    const items = S.cards.map((g, i) => ({ el: g, box: [c10_qX(i), 264, 300, 250], label: C10_Q1[i][1].join(' ') }));
+    quiz(WIDE, [{
+      id: 'c-wie-1', prompt: ['Een medewerker ziet een incident. Waar wordt dat gemeld?'],
+      build: pickEls(items, 0, '5.24.01: bij het meldloket, dat toegankelijk is voor alle interne en externe medewerkers.', i => [null,
+        'De proceseigenaar zorgt voor het oplossen. Melden doet een medewerker bij het meldloket.',
+        'Daar gaat de maandelijkse rapportage heen. Melden doet een medewerker bij het meldloket.',
+        'Bij het CSIRT meldt de organisatie, volgens de incidentprocedure. Een medewerker meldt bij het meldloket.'][i]),
+    }, {
+      id: 'c-wie-2', prompt: ['Wie is verantwoordelijk voor het oplossen van het incident?'],
+      build: pickEls(items, 1, '5.24.03: de proceseigenaar is verantwoordelijk voor het oplossen.', i => [
+        'Het meldloket neemt de melding aan en registreert. Verantwoordelijk voor het oplossen is de proceseigenaar.', null,
+        'Die krijgt de maandelijkse rapportage. Verantwoordelijk voor het oplossen is de proceseigenaar.',
+        'Het CSIRT krijgt een melding. Verantwoordelijk voor het oplossen is de proceseigenaar.'][i]),
+    }, {
+      id: 'c-wie-3', prompt: ['Naar wie gaat elke maand de rapportage over de opvolging?'],
+      build: pickEls(items, 2, '5.24.04: naar de eindverantwoordelijke voor de bedrijfsvoering.', i => [
+        'Het meldloket registreert meldingen. De rapportage gaat naar de eindverantwoordelijke voor de bedrijfsvoering.',
+        'De proceseigenaar is degene die rapporteert, aan de eindverantwoordelijke voor de bedrijfsvoering.', null,
+        'Het CSIRT krijgt meldingen van incidenten. De rapportage gaat naar de eindverantwoordelijke voor de bedrijfsvoering.'][i]),
+    }], done);
+  } }],
+
+  ['cvd', 'Meldingen van buiten', (m) => {
+    const p = panel(0);
+    b_head(p, '5.24.08 · KWETSBAARHEDEN MELDEN');
+    b_kop(p, '5.24.08', 'meldingen van buiten');
+    const tC = m('cvd'), tP = m('pub'), tS = m('std'), tR = m('rap');
+    // Someone outside the organisation has found a weakness.
+    show(b_party(p, 210, 440, 'persoon', 'melder van buiten', { s: 1.6, lab: 92 }), .3);
+    show(b_chip(p, 130, 316, 160, 'kwetsbaarheid', { col: COL.bad, fill: COL.bad, hgt: 40, size: 17 }), .7);
+    show(b_party(p, 1340, 430, 'overheid', 'organisatie', { s: 1.2, lab: 88 }), .3);
+    // The procedure for reporting it: set up, published, and following a guideline or a standard.
+    const proc = b_sheet(p, 440, 250, 660, 320, 'PROCEDURE');
+    b_term(proc, 'Coordinated Vulnerability Disclosure', 'cvd', { x: 468, y: 334, size: 23, o: 1 });
+    T(proc, 'CVD: gecoördineerd bekendmaken van kwetsbaarheden', { x: 468, y: 366, size: 18, fill: COL.dim });
+    b_rise(proc, tC);
+    b_arrow(p, 306, 426, 440, tC + .5); b_arrow(p, 1114, 1250, 440, tC + .9);
+    show(b_box(p, 468, 394, 300, ['ingericht'], { col: COL.task, fill: COL.task, hgt: 58 }), tP);
+    show(b_box(p, 784, 394, 288, ['gepubliceerd'], { col: COL.task, fill: COL.task, hgt: 58 }), tP + .9);
+    show(put(b_caps(p, 'VOLGENS', 468, 484), { o: 0 }), tS);
+    show(b_chip(p, 468, 496, 230, 'NCSC-leidraad', { col: COL.iso, fill: COL.iso, hgt: 44, size: 17 }), tS + .2);
+    b_txt(p, 'of', 724, 526, tS + 2.4, { size: 21, fill: COL.dim });
+    show(b_chip(p, 752, 496, 320, 'NEN-EN-ISO/IEC 29147:2020', { col: COL.iso, fill: COL.iso, hgt: 44, size: 17 }), tS + 2.6);
+    // What such reports bring in belongs in the incident reporting.
+    b_down(p, 770, 580, 616, tR);
+    show(b_box(p, 440, 628, 660, ['informatie uit CVD-meldingen:', 'onderdeel van de incidentrapportage'], { col: COL.task, fill: COL.task, hgt: 100, size: 22 }), tR + .2);
+  }, { hold: true }],   // the lesson waits here: the English term can be heard before it goes on
+
+  ['afdoen', 'Afdoen', (m) => {
+    const p = panel(0);
+    b_head(p, '5.26.02 · REAGEREN OP INCIDENTEN');
+    b_tab(2, .2);
+    b_kop(p, '5.26.02', 'afdoen via het incidentbeheerproces');
+    const tP = m('proces'), tT = m('toez');
+    show(c10_inc(p, 120, 345), .3);
+    // The incident goes through the incident management process, schematic, and comes out settled.
+    b_arrow(p, 354, 424, 380, tP);
+    const proc = G(p, { o: 0, y: 14 });
+    b_rect(proc, 440, 290, 620, 180, { fill: COL.panel, stroke: COL.task, sw: 3 });
+    b_caps(proc, 'INCIDENTBEHEERPROCES', 468, 330, { fill: COL.task, size: 16 });
+    b_caps(proc, 'SCHEMATISCH', 1032, 330, { fill: COL.faint, anchor: 'end' });
+    [0, 1, 2, 3].forEach(k => {
+      mk('rect', { x: 468 + k * 148, y: 370, width: 110, height: 60, rx: 6, fill: COL.board, stroke: COL.edge, 'stroke-width': 2 }, proc);
+      if (k < 3) path(proc, `M${584 + k * 148} 400H${610 + k * 148}`, { stroke: COL.dim, 'stroke-width': 3 });
+    });
+    b_rise(proc, tP + .2);
+    b_arrow(p, 1074, 1144, 380, tP + 2.2);
+    show(b_box(p, 1160, 345, 240, ['afgedaan'], { col: COL.good, fill: COL.good, hgt: 70, size: 24 }), tP + 2.5);
+    // Part of that process: where relevant, a report to the supervisors named in laws and regulations.
+    b_down(p, 750, 480, 566, tT, COL.task);
+    show(b_box(p, 440, 578, 620, ['indien relevant: gemeld bij', 'de aangewezen toezichthouders'], { col: COL.task, fill: COL.task, hgt: 100, size: 23 }), tT + .2);
+    b_arrow(p, 1074, 1180, 628, tT + 2.4);
+    const sup = b_party(p, 1290, 618, 'overheid', 'toezichthouders', { s: 1, lab: 78 });
+    T(sup, 'aangewezen in wet- en regelgeving', { x: 1290, y: 724, size: 17, fill: COL.dim, anchor: 'middle' });
+    show(sup, tT + 2.6);
+  }],
+
+  ['analyse', 'Analyseren', (m) => {
+    const p = panel(0);
+    b_head(p, '5.27.01 · LEREN VAN INCIDENTEN');
+    b_tab(3, .2);
+    b_kop(p, '5.27.01', 'incidenten analyseren');
+    const tA = m('an'), tK = m('voork');
+    show(c10_inc(p, 120, 385, 200), .3);
+    // A chain: analysed, causes found, improvements made, future incidents prevented.
+    show(b_icon(p, 'loep', { x: 404, y: 414, s: 1.4, o: 0, stroke: COL.task }), tA);
+    b_txt(p, 'geanalyseerd', 404, 500, tA, { size: 21, weight: 600, fill: COL.task });
+    b_arrow(p, 456, 508, 420, m('oorz'));
+    show(b_box(p, 520, 380, 270, ['achterliggende', 'oorzaken'], { hgt: 80, size: 22 }), m('oorz'));
+    b_arrow(p, 800, 838, 420, m('verb'));
+    show(b_box(p, 850, 380, 250, ['verbeteringen'], { hgt: 80, size: 22 }), m('verb'));
+    b_arrow(p, 1110, 1148, 420, tK);
+    show(b_box(p, 1160, 380, 320, ['toekomstige incidenten', 'voorkomen'], { col: COL.good, fill: COL.good, hgt: 80, size: 22 }), tK);
+    // The incident that does not happen: shown faint, and struck through.
+    const next = c10_inc(p, 1220, 540, 200);
+    tw(next, { o: .45 }, tK + .9, .4);
+    draw(path(p, 'M1204 622L1436 528', { stroke: COL.good, 'stroke-width': 5 }, { d: 0 }), tK + 1.4, .5);
+  }],
+
+  ['delen', 'Delen met partners', (m) => {
+    const p = panel(0);
+    b_head(p, '5.27.02 · LEREN VAN INCIDENTEN');
+    b_kop(p, '5.27.02', 'analyses delen met partners');
+    const tD = m('deel'), tI = m('incl'), ys = [320, 450, 580];
+    b_rise(b_sheet(p, 150, 280, 440, 340, 'ANALYSE VAN HET INCIDENT', 2), .3);
+    // It goes out to relevant partners, schematic, with the causes and the improvements in it.
+    show(put(b_caps(p, 'BREED GEDEELD MET RELEVANTE PARTNERS', 700, 264, { fill: COL.task }), { o: 0 }), tD);
+    ys.forEach((y, k) => {
+      const g = G(p, { o: 0 });
+      path(g, `M604 450C760 450 800 ${y} 1010 ${y}`, { stroke: COL.dim, 'stroke-width': 3 });
+      b_icon(g, 'doc', { x: 1052, y, s: .85, stroke: COL.task });
+      b_icon(g, k === 1 ? 'bedrijf' : 'overheid', { x: 1170, y, s: .8 });
+      T(g, 'partner ' + 'ABC'[k], { x: 1232, y: y + 8, size: 22 });
+      show(g, tD + .3 + k * .3);
+    });
+    b_txt(p, 'SCHEMATISCH', 1480, 664, tD + .6, { size: 15, fill: COL.faint, anchor: 'end', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    show(b_box(p, 178, 400, 384, ['achterliggende oorzaken'], { col: COL.task, fill: COL.task, hgt: 60, size: 22 }), tI);
+    show(b_box(p, 178, 476, 384, ['verbeteringen'], { col: COL.task, fill: COL.task, hgt: 60, size: 22 }), tI + 1);
+    b_txt(p, 'om herhaling en toekomstige incidenten te voorkomen', 800, 724, m('herh'), { size: 24, weight: 600, fill: COL.task });
+  }],
+
+  ['bewaren', 'Bewaren', (m) => {
+    const p = panel(0);
+    b_head(p, '5.28.01 · BEWAREN');
+    b_tab(4, .2);
+    b_kop(p, '5.28.01', 'minimaal drie jaar bewaren');
+    const tD = m('drie'), tW = m('wat'), x0 = 820, step = 170;
+    // What is kept: the incident, also a suspected one, and all information to analyse and resolve it.
+    const store = b_sheet(p, 120, 262, 600, 330, 'BEWAARD');
+    b_rise(store, .3);
+    show(b_box(p, 148, 330, 544, ['het (vermoedelijke) incident'], { col: COL.bad, fill: COL.bad, hgt: 62, size: 23 }), tD);
+    show(put(b_caps(p, 'ALLE INFORMATIE VOOR ANALYSE EN OPLOSSING', 148, 440), { o: 0 }), tW);
+    show(put(b_caps(p, 'ONDER MEER', 148, 484, { fill: COL.faint }), { o: 0 }), tW + .6);
+    [['log', 'logging'], ['opl', 'de oplossing'], ['adv', 'het advies']].forEach(([mark, str], k) =>
+      show(b_box(p, 148 + k * 184, 498, 176, [str], { hgt: 60, size: 21 }), m(mark)));
+    // For at least three years: the bar runs past the third year.
+    show(b_years(p, x0, 440, step), tD);
+    draw(path(p, `M${x0} 440H${x0 + step * 3}`, { stroke: COL.task, 'stroke-width': 9 }, { d: 0 }), tD + .4, 1.6);
+    show(path(p, `M${x0 + step * 3 + 14} 440H${x0 + step * 3 + 110}`, { stroke: COL.task, 'stroke-width': 9, 'stroke-dasharray': '14 12' }, { o: 0 }), tD + 2);
+    b_txt(p, 'minimaal drie jaar', x0 + step * 1.5, 560, tD + .6, { size: 30, weight: 600, fill: COL.task });
+  }],
+
+  ['q2', 'Controlevraag', () => {
+    // The four controls of this chapter that have government measures, as cards to point at.
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 5.24 TOT EN MET 5.28');
+    b_tab(-1, .2);
+    b_txt(p, 'de vier beheersmaatregelen met overheidsmaatregelen', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.cards = C10_Q2.map(([nr, icon, lines], i) => {
+      const x = c10_qX(i), g = b_tile(p, { x, y: 264, w: 300, h: 250, icon, lines, iconY: 112, iconS: 1.05, size: 21 });
+      T(g, nr, { x: x + 150, y: 312, size: 26, fill: COL.task, weight: 700, anchor: 'middle', font: MONO });
+      b_rise(g, .3 + i * .1);
+      return g;
+    });
+  }, { ask: done => {
+    const items = S.cards.map((g, i) => ({ el: g, box: [c10_qX(i), 264, 300, 250], label: C10_Q2[i][0] + ' ' + C10_Q2[i][2].join(' ') }));
+    const about = ['Dat gaat over het meldloket en de procedures.', 'Dat gaat over het afdoen van incidenten.', 'Dat gaat over analyseren en delen.', 'Dat gaat over bewaren.'];
+    quiz(WIDE, [{
+      id: 'c-incident-1', prompt: ['Na een incident wil de organisatie weten hoe het kon gebeuren. Welke maatregel vraagt dat?'],
+      build: pickEls(items, 2, '5.27.01: incidenten worden geanalyseerd om achterliggende oorzaken vast te stellen en verbeteringen te realiseren.',
+        i => about[i] + ' De analyse van oorzaken staat in 5.27.01.'),
+    }, {
+      id: 'c-incident-2', prompt: ['De logging van een incident is twee jaar oud. Waar staat hoe lang die bewaard blijft?'],
+      build: pickEls(items, 3, '5.28.01: het incident en alle informatie om het te analyseren en op te lossen blijven minimaal drie jaar bewaard.',
+        i => about[i] + ' De bewaartermijn staat in 5.28.01.'),
+    }, {
+      id: 'c-incident-3', prompt: ['Een incident moet misschien bij de toezichthouder worden gemeld. Waar staat dat?'],
+      build: pickEls(items, 1, '5.26.02: in het incidentbeheerproces staat dat incidenten, indien relevant, bij de aangewezen toezichthouders worden gemeld.',
+        i => about[i] + ' Melden bij de toezichthouders staat in 5.26.02.'),
+    }], done);
+  } }],
+
+  ['wrap', 'Samenvatting', (m) => {
+    const p = panel(0);
+    b_head(p, 'SAMENVATTING');
+    hide(S.tabsG, 0, .4);
+    b_wrap(p, [
+      ['Melden bij het meldloket; de proceseigenaar zorgt voor oplossen.', 'Er is een meldprocedure, en elke maand een rapportage over de opvolging.', 'w1'],
+      ['De incidentprocedure regelt de meldingen.', 'Binnen de wettelijke termijn bij het CSIRT en aan betrokkenen. Van buiten: de CVD-procedure.', 'w2'],
+      ['Van elk incident wordt geleerd.', 'Analyse van de oorzaken, verbeteringen, en breed delen met relevante partners.', 'w3'],
+      ['Minimaal drie jaar bewaren.', 'Het incident en alle informatie om het te analyseren en op te lossen.', 'w4'],
+    ], m);
+  }],
+
+  ['final1', 'Oefenronde 1', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-stellingen', prompt: ['Klopt het, of klopt het niet?'],
+    build: grid([
+      { parts: ['Alleen interne medewerkers kunnen een incident melden bij het meldloket.'], ans: ['n'], why: 'Het meldloket is toegankelijk voor alle interne en externe medewerkers.' },
+      { parts: ['De proceseigenaar rapporteert elke maand over de opvolging van incidenten.'], ans: ['k'], why: 'Aan de eindverantwoordelijke voor de bedrijfsvoering.' },
+      { parts: ['De analyse van een incident blijft binnen de eigen organisatie.'], ans: ['n'], why: 'De analyses worden breed gedeeld met relevante partners, met de oorzaken en de verbeteringen.' },
+      { parts: ['In de incidentprocedure staat een verwijzing naar de procedure voor crisisbeheersing.'], ans: ['k'], why: 'Zo staat het in 5.24.05.' },
+      { parts: ['Informatie over een incident mag na een jaar worden weggegooid.'], ans: ['n'], why: 'De bewaartermijn is minimaal drie jaar.' },
+    ], KN, { multi: false, text: true }),
+  }], done, 'Oefenronde 1 van 2') }],
+
+  ['final2', 'Oefenronde 2', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-procedure', prompt: ['Wat staat ten minste in de incidentprocedure?'],
+    build: choice([['Dat incidenten binnen de wettelijke termijn bij het CSIRT worden gemeld.'], ['Dat elk incident openbaar wordt gemaakt.'], ['Dat de leverancier elk incident oplost.']], 0,
+      'En ook: dat meldingen van het CSIRT worden verwerkt, en dat betrokkenen binnen de wettelijke termijn worden ingelicht.',
+      [null, 'Dat vraagt de maatregel niet. Er staat in dat incidenten binnen de wettelijke termijn bij het CSIRT worden gemeld.',
+        'Voor het oplossen is de proceseigenaar verantwoordelijk. In de procedure staat het melden bij het CSIRT.']),
+  }, {
+    id: 'p-cvd', prompt: ['Waarvoor is de CVD-procedure?'],
+    build: choice([['Voor het bewaren van logging.'], ['Voor het gecoördineerd bekendmaken van kwetsbaarheden.'], ['Voor de maandelijkse rapportage.']], 1,
+      'De procedure is ingericht en gepubliceerd; wat eruit komt, is onderdeel van de incidentrapportage.',
+      ['Bewaren staat in 5.28.01. De CVD-procedure is er voor het gecoördineerd bekendmaken van kwetsbaarheden.', null,
+        'Rapporteren doet de proceseigenaar. De CVD-procedure is er voor het gecoördineerd bekendmaken van kwetsbaarheden.']),
+  }, {
+    id: 'p-bewaren', prompt: ['Wat blijft minimaal drie jaar bewaard?'],
+    build: choice([['Alleen de eerste melding.'], ['Alleen de logging.'], ['Het incident en alle informatie om het te analyseren en op te lossen.']], 2,
+      'Daaronder de logging, de oplossing en het advies. Het geldt ook voor een vermoedelijk incident.',
+      ['Niet alleen de melding: het incident en alle informatie om het te analyseren en op te lossen.',
+        'De logging hoort erbij, maar ook de oplossing, het advies en het incident zelf.', null]),
+  }], done, 'Oefenronde 2 van 2 · vraag') }],
+
+  ['finish', 'Afgerond', () => { panel(0); }, { ask: finishCard }],
+].map(([id, title, run, extra]) => ({ id, title, run, ...extra }));
+
+boot();
+</script>
+</body>
+</html>

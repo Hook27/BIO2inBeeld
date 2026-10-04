@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deel 2 lezen · BIO2 in beeld</title>
+<link rel="stylesheet" href="../lib/engine.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2314171a'/%3E%3Cpath d='M15 52V38M27 52V20M39 52V32M51 52V14' stroke='%238d959d' stroke-width='7'/%3E%3Cpath d='M7 28H57' stroke='%23c9a45c' stroke-width='4'/%3E%3C/svg%3E">
+<link rel="expect" href="#bar" blocking="render"><!-- hold the first frame until the player exists, so the page transition can run -->
+</head>
+<body>
+<script src="../lib/engine.js"></script>
+<script src="audio/nl/timings.js"></script>
+<script>
+'use strict';
+// Hoofdstuk 6: de inleiding van deel 2 (hoe je een overheidsmaatregel leest) en de overheidsmaatregelen 5.01.01
+// tot en met 5.08.01 van de BIO2 (pagina 13 en 14).
+// Beat ids match content/bio2/ch06/narration.nl.json. One idea per beat.
+const CHAPTER = { number: 6, title: 'Deel 2 lezen; beleid, rollen en scholing', minutes: 8, language: 'nl', next: '../ch07/' };
+
+/* ---------- chapter data (used by the helpers and inside BEATS, so defined first) ---------- */
+const C6_TABS = ['5.01', '5.02', '5.03', '5.04', '5.05', '5.06', '5.07', '5.08'];
+// The first eight controls of ISO 27002 (topics shortened, in our own words) with their government measures in the BIO2.
+const C6_CTRL = [
+  { code: '5.1', topic: ['beleid voor', 'informatiebeveiliging'], nrs: ['5.01.01', '5.01.02'] },
+  { code: '5.2', topic: ['rollen en', 'verantwoordelijkheden'], nrs: ['5.02.01', '5.02.02'] },
+  { code: '5.3', topic: ['functiescheiding'], nrs: [] },
+  { code: '5.4', topic: ['verantwoordelijkheden', 'van het management'], nrs: ['5.04.01'], moved: ['5.04.02 en 5.04.03 zijn', 'verplaatst naar 5.10'] },
+  { code: '5.5', topic: ['contact met', 'overheidsinstanties'], nrs: ['5.05.01'] },
+  { code: '5.6', topic: ['contact met', 'belangengroepen'], nrs: [] },
+  { code: '5.7', topic: ['informatie over', 'dreigingen'], nrs: [] },
+  { code: '5.8', topic: ['informatiebeveiliging', 'in projecten'], nrs: ['5.08.01'] },
+];
+// The picture of the link between a control and its measures: three controls on the left, their measures on the right.
+const C6_ISOY = [216, 356, 496];
+const C6_ROWS = ['5.01.01', '5.01.02', '5.02.01', '5.02.02'];
+const c6_rowY = i => C6_ISOY[i >> 1] + (i & 1) * 62;
+// The six points the policy contains at least (5.01.01): [in short, the detail from the BIO2].
+const C6_PUNT = [
+  ['strategische uitgangspunten en randvoorwaarden', 'afgestemd op het algemene beveiligingsbeleid en het informatievoorzieningsbeleid'],
+  ['organisatie van de informatiebeveiligingsfunctie', 'verantwoordelijkheden, taken en bevoegdheden'],
+  ['verantwoordelijkheden toegewezen aan lijnmanagers', 'ketens van informatiesystemen, OT, privacybescherming en continuïteit (BCM)'],
+  ['gemeenschappelijke betrouwbaarheidseisen en normen', 'die op de organisatie van toepassing zijn'],
+  ['frequentie van de evaluatie', 'hoe vaak het beleid wordt geëvalueerd'],
+  ['bevordering van het beveiligingsbewustzijn', ''],
+];
+const c6_puntY = i => 304 + i * 78;
+// The five controls that have government measures, as cards for the second quick check: [number, icon, label].
+const C6_Q = [
+  ['5.01', 'doc', ['beleid']], ['5.02', 'persoon', ['rollen', 'en CISO']], ['5.04', 'les', ['scholing']],
+  ['5.05', 'contact', ['contacten']], ['5.08', 'server', ['risicoafweging', 'bij wijzigingen']],
+];
+const c6_qX = i => 96 + i * 284;
+// The icons 'les', 'contact' and 'doorgaan' started here and moved to the engine when chapters 11 and 12 needed them.
+
+/* ---------- chapter drawing helpers (prefixed c6_; the shared b_ helpers live in ../lib/engine.js,
+   among them b_kick, b_kop, b_box, b_matrix and b_dart, which started in this chapter) ---------- */
+// A control from ISO 27002 as a blue card at height y. Returns the group, hidden.
+const c6_iso = (p, code, y) => {
+  const g = G(p, { o: 0 });
+  b_rect(g, 150, y, 330, 116, { fill: '#172028', stroke: COL.iso });
+  T(g, code, { x: 178, y: y + 56, size: 40, fill: COL.iso, weight: 700, font: MONO });
+  T(g, 'beheersmaatregel', { x: 178, y: y + 92, size: 21, fill: COL.dim });
+  return g;
+};
+// A government measure as an amber row with its number, at height y. Returns the group, hidden.
+const c6_row = (p, nr, y) => {
+  const g = G(p, { o: 0 });
+  b_rect(g, 760, y, 560, 54, { fill: COL.panel, stroke: COL.task, rx: 6 });
+  T(g, nr, { x: 784, y: y + 36, size: 24, fill: COL.task, weight: 700, font: MONO });
+  T(g, 'overheidsmaatregel', { x: 920, y: y + 35, size: 21, fill: COL.dim });
+  return g;
+};
+// The line from a control (its right side, at y1) to a row (its left side, at y2); not yet drawn.
+const c6_join = (p, y1, y2) => path(p, `M480 ${y1}C620 ${y1} 620 ${y2} 760 ${y2}`, { stroke: COL.dim, 'stroke-width': 2.5 }, { d: 0 });
+// Point i of the policy enters on the sheet (S.sheet) and its number lights up.
+const c6_punt = (i, t0) => {
+  const y = c6_puntY(i), g = G(S.sheet, { o: 0, x: 14 }), [main, sub] = C6_PUNT[i];
+  T(g, main, { x: 656, y: y + (sub ? 34 : 45), size: 24, weight: 600 });
+  if (sub) T(g, sub, { x: 656, y: y + 60, size: 18, fill: COL.dim });
+  tw(g, { o: 1, x: 0 }, t0, .5, out);
+  tw(S.slots[i].frame, { c_stroke: COL.task }, t0, .4); tw(S.slots[i].num, { c_fill: COL.task }, t0, .4);
+};
+
+/* ---------- beats: [id, title, run(m, D), { ask }?] ---------- */
+const BEATS = [
+  ['intro', 'Deel 2 lezen', (m, D) =>
+    b_title(m, D, 'DEEL B · MAATREGELEN VOOR DE ORGANISATIE · HOOFDSTUK 6', 'Deel 2 lezen', 'Hoe je een overheidsmaatregel leest, en de eerste: beleid, rollen en scholing.')],
+
+  ['deel2', 'Deel 2', (m) => {
+    const p = panel(0);
+    b_head(p, 'INLEIDING DEEL 2 · BIO-OVERHEIDSMAATREGELEN');
+    const tA = m('alle'), tK = m('koppel');
+    // Where we come from: part 1, the framework.
+    const was = G(p, { o: 0 });
+    T(was, 'deel 1 van de BIO: het kader', { x: 800, y: 430, size: 36, weight: 600, anchor: 'middle' });
+    T(was, 'hoofdstuk 1 tot en met 5 van dit boek', { x: 800, y: 478, size: 24, fill: COL.dim, anchor: 'middle' });
+    show(was, .2); hide(was, tA - .5, .4);
+    // Part 2: the government measures on the right, each tied to a control from ISO 27002 on the left.
+    const right = S.right = G(p);
+    b_kick(right, 'BIO · DEEL 2 · OVERHEIDSMAATREGELEN', 760, COL.task, tA);
+    S.rows = C6_ROWS.map((nr, i) => { const g = c6_row(right, nr, c6_rowY(i)); show(g, tA + .3 + i * .25); return g; });
+    S.joins = C6_ROWS.map((nr, i) => { const e = c6_join(right, C6_ISOY[i >> 1] + 58, c6_rowY(i) + 27); draw(e, tK + .7 + i * .2, .6); return e; });
+    S.isoKick = b_kick(p, 'NEN-EN-ISO/IEC 27002:2022', 150, COL.iso, tK);
+    S.iso = ['5.1', '5.2'].map((code, k) => { const g = c6_iso(p, code, C6_ISOY[k]); show(g, tK + k * .5); return g; });
+  }],
+
+  ['nummer', 'Het nummer', (m) => {
+    // Same picture. Everything steps back except measure 5.01.02 and its control; the number is taken apart below.
+    const p = S.panel, tN = m('neem'), tD = m('drie'), tV = m('volg'), tS = m('dus');
+    [S.rows[0], S.rows[2], S.rows[3], S.iso[1], S.joins[0], S.joins[2], S.joins[3]].forEach(e => tw(e, { o: .25 }, tN, .5));
+    const band = S.band = G(p);
+    ctx2d.font = `700 104px ${MONO}`;
+    const w1 = ctx2d.measureText('5.01').width, w2 = ctx2d.measureText('.02').width, x0 = 190 + w1, xl = x0 + w2 + 60;
+    const a = T(band, '5.01', { x: x0, y: 752, size: 104, weight: 700, font: MONO, anchor: 'end', o: 0 });
+    const b = T(band, '.02', { x: x0, y: 752, size: 104, weight: 700, font: MONO, o: 0 });
+    show(a, tN); show(b, tN);
+    tw(a, { c_fill: COL.iso }, tD, .4);
+    draw(path(band, `M192 774H${x0 - 6}`, { stroke: COL.iso, 'stroke-width': 4 }, { d: 0 }), tD, .5);
+    show(T(band, 'de eerste drie cijfers: beheersmaatregel 5.1 uit ISO 27002', { x: xl, y: 704, size: 25, fill: COL.iso, weight: 600, o: 0 }), tD + .3);
+    tw(b, { c_fill: COL.task }, tV, .4);
+    draw(path(band, `M${x0 + 20} 774H${x0 + w2 - 2}`, { stroke: COL.task, 'stroke-width': 4 }, { d: 0 }), tV, .5);
+    show(T(band, 'de cijfers daarna: volgnummer van de overheidsmaatregel', { x: xl, y: 748, size: 25, fill: COL.task, weight: 600, o: 0 }), tV + .3);
+    // So this is measure two under control 5.1: the line between them lights up.
+    tw(S.joins[1], { c_stroke: COL.iso, 'a_stroke-width': 4.5 }, tS, .4);
+  }],
+
+  ['minimum', 'Het verplichte minimum', (m) => {
+    const p = S.panel, tM = m('min'), tG = m('genoeg');
+    hide(S.band, 0, .4);
+    [...S.rows, ...S.iso, ...S.joins].forEach(e => tw(e, { o: 1 }, .2, .5));
+    tw(S.joins[1], { c_stroke: COL.dim, 'a_stroke-width': 2.5 }, .2, .4);
+    // The measures under a control are its mandatory minimum.
+    const br = S.brace = G(S.right);
+    [0, 1].forEach(k => draw(path(br, `M1334 ${C6_ISOY[k]}H1348V${C6_ISOY[k] + 116}H1334`, { stroke: COL.task, 'stroke-width': 3 }, { d: 0 }), tM + k * .3, .5));
+    ['verplichte', 'minimale', 'invulling'].forEach((str, i) => show(T(br, str, { x: 1368, y: 322 + i * 30, size: 23, fill: COL.task, weight: 600, o: 0 }), tM + .5));
+    // Whether that is enough is for a risk analysis to show.
+    const band = S.band = G(p);
+    show(put(b_matrix(band, 200, 716, 1.3), { o: 0 }), tG);
+    show(T(band, 'genoeg om het risico te beheersen?', { x: 268, y: 708, size: 30, weight: 600, o: 0 }), tG);
+    show(T(band, 'dat blijkt uit een risicoanalyse', { x: 268, y: 748, size: 25, fill: COL.dim, o: 0 }), tG + 1.2);
+  }],
+
+  ['zonder', 'Zonder overheidsmaatregel', (m) => {
+    const p = S.panel, tL = m('leeg'), tR = m('richtlijn');
+    hide(S.band, 0, .4); hide(S.brace, 0, .4);
+    const g3 = c6_iso(p, '5.3', C6_ISOY[2]);
+    S.iso.push(g3); show(g3, .3);
+    // Where its measures would be, the table says: none.
+    const slot = G(S.right, { o: 0 });
+    b_rect(slot, 760, 527, 560, 54, { stroke: COL.dim, rx: 6, 'stroke-dasharray': '8 7' });
+    T(slot, '5.03.01', { x: 784, y: 563, size: 24, fill: COL.dim, weight: 700, font: MONO });
+    const none = T(slot, 'geen overheidsmaatregel', { x: 920, y: 562, size: 21, fill: COL.dim });
+    show(slot, tL);
+    draw(c6_join(S.right, 554, 554), tL, .5);
+    // If the control applies, the implementation guidance of ISO 27002 takes that place.
+    const tip = b_chip(S.right, 912, 533, 396, 'implementatierichtlijn ISO 27002', { col: COL.iso, fill: COL.iso, hgt: 42, size: 18, bg: '#172028' });
+    put(tip, { x: -500 }); show(tip, tR, .3); tw(tip, { x: 0 }, tR + .2, .9, io);
+    hide(none, tR + .4, .3);
+    b_txt(S.right, 'als de beheersmaatregel van toepassing is', 760, 614, tR + 1.1, { size: 21, fill: COL.dim, anchor: 'start' });
+  }],
+
+  ['afwijken', 'Afwijken', (m) => {
+    // Same picture: what it takes to leave such a control out, or to deviate from it.
+    const p = S.panel, tR = m('ra'), tV = m('vvt');
+    const band = S.band = G(p);
+    show(b_box(band, 150, 664, 340, ['niet toepassen of afwijken?'], { col: COL.dim, hgt: 76, size: 21 }), .3);
+    b_arrow(band, 502, 548, 702, tR);
+    show(b_box(band, 560, 664, 400, ['onderbouwen met een risicoanalyse'], { hgt: 76, size: 21 }), tR + .3);
+    b_arrow(band, 972, 1018, 702, tV);
+    show(b_box(band, 1030, 664, 440, ['verwijzing in de bijlage uitzonderingen', 'van de verklaring van toepasselijkheid'], { col: COL.task, hgt: 76, size: 19 }), tV + .3);
+  }],
+
+  ['q1', 'Controlevraag', () => {
+    // The three controls line up; their measures are out of sight, so the number has to tell.
+    hide(S.right, 0, .3); hide(S.band, 0, .3); hide(S.isoKick, 0, .3);
+    S.iso.forEach((g, k) => tw(g, { x: 105 + k * 380, y: 372 - C6_ISOY[k] }, .2, .7));
+    b_txt(S.panel, 'drie beheersmaatregelen uit ISO 27002', 800, 310, .6, { size: 26, fill: COL.dim });
+  }, { ask: done => {
+    const items = S.iso.map((g, k) => ({ el: g, box: [255 + k * 380, 372, 330, 116], label: 'beheersmaatregel 5.' + (k + 1) }));
+    quiz(WIDE, [{
+      id: 'c-nummer-1', prompt: ['Bij welke beheersmaatregel hoort overheidsmaatregel 5.02.02?'],
+      build: pickEls(items, 1, 'De eerste drie cijfers, 5.02, verwijzen naar beheersmaatregel 5.2.', i => [
+        'Bij 5.1 horen de nummers die met 5.01 beginnen. 5.02.02 begint met 5.02 en hoort bij 5.2.', null,
+        'Bij 5.3 zouden de nummers met 5.03 beginnen. 5.02.02 begint met 5.02 en hoort bij 5.2.'][i]),
+    }, {
+      id: 'c-nummer-2', prompt: ['En overheidsmaatregel 5.01.02?'],
+      build: pickEls(items, 0, '5.01 verwijst naar beheersmaatregel 5.1; 02 is het volgnummer.', i => [null,
+        'Bij 5.2 horen de nummers die met 5.02 beginnen. 5.01.02 begint met 5.01 en hoort bij 5.1.',
+        'Bij 5.3 zouden de nummers met 5.03 beginnen. 5.01.02 begint met 5.01 en hoort bij 5.1.'][i]),
+    }, {
+      id: 'c-nummer-3', prompt: ['Welke beheersmaatregel heeft geen overheidsmaatregel, zodat de richtlijn uit ISO 27002 geldt?'],
+      build: pickEls(items, 2, 'Bij 5.3 staat: geen overheidsmaatregel. Is 5.3 van toepassing, dan gebruik je de implementatierichtlijn.', i => [
+        'Bij 5.1 horen de overheidsmaatregelen 5.01.01 en 5.01.02. Geen overheidsmaatregel heeft 5.3.',
+        'Bij 5.2 horen de overheidsmaatregelen 5.02.01 en 5.02.02. Geen overheidsmaatregel heeft 5.3.', null][i]),
+    }], done);
+  } }],
+
+  ['grijs', 'Grijs gemarkeerd', (m) => {
+    const p = panel(0);
+    b_head(p, 'INLEIDING DEEL 2 · GRIJS GEMARKEERD');
+    const tG = m('grijs'), tB = m('buiten'), tZ = m('zelf'), tD = m('dus');
+    // The table of part 2, schematic: a number and a text on every row. The last two rows are marked grey.
+    b_txt(p, 'SCHEMATISCH', 770, 204, .6, { size: 15, fill: COL.faint, anchor: 'end', weight: 600, font: MONO }).setAttribute('letter-spacing', '1.5');
+    const tab = G(p, { o: 0 });
+    b_rect(tab, 130, 220, 640, 50, { fill: COL.panel, rx: 0 });
+    [['NUMMER', 154], ['OVERHEIDSMAATREGEL', 300]].forEach(([str, x]) =>
+      T(tab, str, { x, y: 252, size: 15, fill: COL.dim, weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5'));
+    for (let i = 0; i < 5; i++) {
+      const y = 270 + i * 76, cell = b_rect(tab, 130, y, 640, 76, { fill: COL.board, rx: 0 });
+      mk('rect', { x: 154, y: y + 30, width: 96, height: 16, rx: 3, fill: COL.edge }, tab);
+      mk('rect', { x: 300, y: y + 22, width: 400, height: 12, rx: 3, fill: COL.edge }, tab);
+      mk('rect', { x: 300, y: y + 44, width: 290, height: 12, rx: 3, fill: COL.edge }, tab);
+      if (i > 2) tw(cell, { c_fill: '#4a5159' }, tG + (i - 3) * .25, .6);
+    }
+    path(tab, 'M276 220V650', { stroke: COL.edge, 'stroke-width': 2 });
+    show(tab, .2);
+    // Grey: outside the Cyberbeveiligingswet, so binding self-regulation (dashed, as in chapter 4). Not grey: the law itself.
+    const area = (y, kick, title, dash, tK, tT, bracket) => {
+      draw(path(p, bracket, { stroke: COL.task, 'stroke-width': 3 }, { d: 0 }), tK, .6);
+      show(put(b_rect(p, 900, y, 580, 150, { fill: COL.task, stroke: COL.task, sw: 3, 'fill-opacity': dash ? .04 : .12, ...(dash ? { 'stroke-dasharray': '10 8' } : {}) }), { o: 0 }), tK + .3);
+      b_kick(p, kick, 928, COL.task, tK + .4, y + 50);
+      b_txt(p, title, 928, y + 108, tT, { size: 34, weight: 600, fill: COL.task, anchor: 'start' });
+    };
+    area(499, 'GRIJS · NIET ONDER DE CBW', 'verplichtende zelfregulering', true, tB, tZ, 'M784 502H800V646H784 M800 574H900');
+    area(309, 'NIET GRIJS · ONDER DE CBW', 'wettelijk verplicht', false, tD, tD + .5, 'M784 274H800V494H784 M800 384H900');
+    b_txt(p, 'verplicht zijn ze allemaal', 800, 736, tD + 1, { size: 32, weight: 600, fill: COL.task });
+  }],
+
+  ['acht', '5.01 tot en met 5.08', (m) => {
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 5.01 TOT EN MET 5.08');
+    // The strip of this chapter: the eight controls. The three without a government measure get a dashed frame.
+    b_tabs(C6_TABS, .4);
+    C6_CTRL.forEach((c, i) => { if (!c.nrs.length) b_tabNone(i); });
+    const tV = m('vijf'), tD = m('drie');
+    let withNr = 0, without = 0;
+    C6_CTRL.forEach((c, i) => {
+      const x = 120 + (i % 4) * 346, y = 176 + (i >> 2) * 286, g = G(p, { o: 0, y: 12 });
+      b_rect(g, x, y, 320, 262, { fill: COL.panel });
+      T(g, c.code, { x: x + 24, y: y + 52, size: 34, fill: COL.iso, weight: 700, font: MONO });
+      c.topic.forEach((str, k) => T(g, str, { x: x + 24, y: y + 92 + k * 28, size: 21 }));
+      tw(g, { o: 1, y: 0 }, .3 + i * .1, .5, out);
+      if (c.nrs.length) {
+        const t0 = tV + .2 + withNr++ * .3;
+        c.nrs.forEach((nr, k) => show(b_chip(g, x + 24 + k * 140, y + 156, 128, nr, { col: COL.task, fill: COL.task, hgt: 42, size: 19 }), t0));
+        if (c.moved) c.moved.forEach((str, k) => show(T(g, str, { x: x + 24, y: y + 226 + k * 20, size: 15, fill: COL.dim, font: MONO, o: 0 }), t0 + .6));
+      } else {
+        const t0 = tD + .2 + without++ * .3;
+        show(T(g, 'geen overheidsmaatregel', { x: x + 24, y: y + 176, size: 17, fill: COL.dim, font: MONO, o: 0 }), t0);
+        show(b_chip(g, x + 24, y + 196, 272, 'richtlijn uit ISO 27002', { col: COL.iso, fill: COL.iso, hgt: 42, size: 18 }), t0 + 1.6);
+      }
+    });
+    b_txt(p, 'BRON ONDERWERPEN: NEN-EN-ISO/IEC 27002:2022 · VERKORT WEERGEGEVEN', 120, 772, 1.6, { size: 14, fill: COL.faint, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+  }],
+
+  ['beleid', 'Beleid', (m) => {
+    const p = panel(0);
+    b_head(p, '5.01.01 · INFORMATIEBEVEILIGINGSBELEID');
+    b_tab(0, .2);
+    b_kop(p, '5.01.01', 'informatiebeveiligingsbeleid');
+    const tD = m('doc'), tV = m('vast'), tZ = m('zes');
+    // The policy as a sheet with six numbered places.
+    const sheet = S.sheet = G(p, { o: 0, y: 14 });
+    b_rect(sheet, 560, 236, 920, 540, { fill: COL.panel });
+    T(sheet, 'INFORMATIEBEVEILIGINGSBELEID', { x: 592, y: 276, size: 16, fill: COL.dim, weight: 700, font: MONO }).setAttribute('letter-spacing', '2');
+    path(sheet, 'M592 294H1448', { stroke: COL.edge, 'stroke-width': 2 });
+    b_rise(sheet, tD);
+    show(b_icon(p, 'overheid', { x: 320, y: 318, s: 1.2, o: 0 }), tD);
+    b_txt(p, 'de organisatie stelt het op', 320, 420, tD + .3, { size: 23 });
+    // The board adopts it: its stamp lands on the sheet.
+    show(b_icon(p, 'persoon', { x: 320, y: 522, s: 1.5, o: 0 }), tV);
+    b_txt(p, 'het bestuur stelt het vast', 320, 618, tV + .3, { size: 23, weight: 600, fill: COL.task });
+    const stamp = G(p, { x: 320, y: 678, r: -5, o: 0 });
+    b_rect(stamp, -108, -22, 216, 44, { fill: COL.board, stroke: COL.task, sw: 3, rx: 5 });
+    T(stamp, 'VASTGESTELD', { y: 7, size: 18, fill: COL.task, anchor: 'middle', weight: 700, font: MONO }).setAttribute('letter-spacing', '2');
+    show(stamp, tV + .6, .3); tw(stamp, { x: 1350, y: 242 }, tV + 1.1, .9, io);
+    S.slots = C6_PUNT.map((pt, i) => {
+      const y = c6_puntY(i), g = G(sheet, { o: 0 });
+      const frame = b_rect(g, 592, y + 14, 44, 44, { stroke: COL.edge, rx: 5 });
+      const num = T(g, String(i + 1), { x: 614, y: y + 45, size: 22, fill: COL.dim, weight: 700, anchor: 'middle', font: MONO });
+      show(g, tZ + i * .14);
+      return { frame, num };
+    });
+  }],
+
+  ['punten', 'Zes punten', (m) => {
+    // Same picture: the first three points fill in.
+    [0, 1, 2].forEach(i => c6_punt(i, m('p' + (i + 1))));
+  }],
+
+  ['punten2', 'Zes punten, vervolg', (m) => {
+    [3, 4, 5].forEach(i => c6_punt(i, m('p' + (i + 1))));
+  }],
+
+  ['jaarlijks', 'Jaarlijks beoordelen', (m) => {
+    const p = panel(0);
+    b_head(p, '5.01.02 · BELEID BEOORDELEN');
+    b_kop(p, '5.01.02', 'het beleid beoordelen en bijstellen');
+    const tJ = m('jaar'), cx = 400, cy = 510, R = 160;
+    // A year as a ring with twelve months; the marker goes round once and the policy is reviewed.
+    const ring = G(p, { o: 0 });
+    mk('circle', { cx, cy, r: R, fill: 'none', stroke: COL.edge, 'stroke-width': 3 }, ring);
+    for (let k = 0; k < 12; k++) {
+      const s = Math.sin(k * Math.PI / 6), c = Math.cos(k * Math.PI / 6);
+      path(ring, `M${(cx + (R - 9) * s).toFixed(1)} ${(cy - (R - 9) * c).toFixed(1)}L${(cx + (R + 9) * s).toFixed(1)} ${(cy - (R + 9) * c).toFixed(1)}`, { stroke: COL.dim, 'stroke-width': 2.5 });
+    }
+    b_icon(ring, 'doc', { x: cx, y: cy - 16, s: 1.6 });
+    T(ring, 'beleid', { x: cx, y: cy + 62, size: 24, weight: 600, anchor: 'middle' });
+    T(ring, '12 MAANDEN', { x: cx, y: cy + R + 48, size: 15, fill: COL.faint, weight: 700, anchor: 'middle', font: MONO }).setAttribute('letter-spacing', '1.5');
+    show(ring, .2);
+    const hand = G(p, { x: cx, y: cy, o: 0 });
+    mk('circle', { cx: 0, cy: -R, r: 11, fill: COL.task }, hand);
+    show(hand, tJ, .3); tw(hand, { r: 360 }, tJ + .2, 2.4, io);
+    show(b_chip(p, cx - 100, cy - R - 70, 200, 'beoordeeld', { col: COL.task, fill: COL.task, hgt: 40, size: 18, bg: COL.board }), tJ + 2.5);
+    b_point(p, 0, ['minimaal jaarlijks beoordeeld'], tJ, 380);
+    b_point(p, 1, ['in aansluiting op de bestuurscyclus', 'en de P&C-cyclus (planning en control)'], m('cyclus'), 380);
+    b_point(p, 2, ['en op externe ontwikkelingen'], m('extern'), 380);
+    const last = b_point(p, 3, ['zo nodig bijgesteld'], m('bij'), 380).lastChild;
+    last.setAttribute('fill', COL.task); last.setAttribute('font-weight', 600);
+  }],
+
+  ['rollen', 'Rollen', (m) => {
+    const p = panel(0);
+    b_head(p, '5.02.01 · ROLLEN EN VERANTWOORDELIJKHEDEN');
+    b_tab(1, .2);
+    b_kop(p, '5.02.01', 'rollen en verantwoordelijkheden');
+    const tS = m('samen');
+    b_txt(p, 'het bestuur legt vast en stelt vast wie waarvoor verantwoordelijk is', 120, 258, m('vier'), { size: 25, anchor: 'start' });
+    // Four fields; each appears on its word.
+    [['schild', ['informatiebeveiliging']], ['persoon', ['privacybescherming']], ['tandwiel', ['operationele', 'technologie (OT)']], ['doorgaan', ['bedrijfscontinuïteit', '(BCM)']]].forEach(([icon, lines], i) =>
+      b_rise(b_tile(p, { x: 120 + i * 346, y: 290, w: 320, h: 236, icon, lines, iconY: 72 }), m('t' + (i + 1))));
+    b_txt(p, 'zoals de besturing van gemalen', 972, 506, m('t3') + .8, { size: 16, fill: COL.dim });
+    // The coherence that is laid down: security (of information and of OT) and continuity.
+    draw(path(p, 'M280 532V562H1318V532 M972 562V532', { stroke: COL.task, 'stroke-width': 3 }, { d: 0 }), tS, .8);
+    b_txt(p, 'ook de samenhang ligt vast: beveiliging en continuïteit', 800, 604, tS + .5, { size: 25, weight: 600, fill: COL.task });
+    show(b_box(p, 380, 648, 840, ['specifieke aandacht voor het adequaat afhandelen van incidenten'], { col: COL.dim, hgt: 62 }), m('inc'));
+  }],
+
+  ['eigenaar', 'Wie het risico behandelt', (m) => {
+    const p = panel(0);
+    b_head(p, '5.02.01 · ROLLEN EN VERANTWOORDELIJKHEDEN');
+    b_kop(p, '5.02.01', 'wie het risico behandelt');
+    const tM = m('mid'), tR = m('risico');
+    show(b_icon(p, 'persoon', { x: 360, y: 400, s: 2.1, o: 0 }), .3);
+    b_txt(p, 'lijnmanager of', 360, 516, .4, { size: 25, weight: 600 });
+    b_txt(p, 'proceseigenaar', 360, 548, .4, { size: 25, weight: 600 });
+    show(b_icon(p, 'server', { x: 1180, y: 400, s: 1.7, o: 0 }), tM);
+    b_txt(p, 'bedrijfsmiddelen', 1180, 506, tM, { size: 25, weight: 600 });
+    b_arrow(p, 470, 1080, 400, tM + .3);
+    b_txt(p, 'verantwoordelijk voor', 775, 380, tM + .6, { size: 23, fill: COL.dim });
+    // The risks that belong to those assets come with them.
+    show(b_chip(p, 1090, 560, 180, 'risico’s', { col: COL.bad, fill: COL.bad, hgt: 48 }), tR);
+    show(b_dart(p, 470, 452, 1078, 578, { stroke: COL.task }), tR + .7);
+    b_txt(p, 'dan ook verantwoordelijk voor de behandeling van die risico’s', 800, 700, tR + 1.3, { size: 28, weight: 600, fill: COL.task });
+  }],
+
+  ['ciso', 'De CISO', (m) => {
+    const p = panel(0);
+    b_head(p, '5.02.02 · CISO');
+    b_kop(p, '5.02.02', 'een CISO aangesteld');
+    const tO = m('onafh'), tA = m('aan'), tG = m('orgaan');
+    const node = G(p, { o: 0 });
+    mk('circle', { cx: 340, cy: 440, r: 62, fill: COL.panel, stroke: COL.task, 'stroke-width': 3 }, node);
+    b_icon(node, 'persoon', { x: 340, y: 440, s: 1.25 });
+    T(node, 'CISO', { x: 340, y: 542, size: 28, weight: 600, anchor: 'middle' });
+    T(node, 'Chief Information Security Officer', { x: 340, y: 572, size: 16, fill: COL.dim, anchor: 'middle', font: MONO });
+    show(node, .3);
+    show(b_box(p, 150, 612, 380, ['onafhankelijk en zelfstandig'], { col: COL.task, fill: COL.task }), tO);
+    b_txt(p, 'adviseren en rapporteren', 720, 448, tO + 2.2, { size: 27, weight: 600 });
+    b_txt(p, 'over informatiebeveiliging', 720, 482, tO + 2.6, { size: 22, fill: COL.dim });
+    // To the board, to the body that oversees it, or to both. Dashed: advice, as on the role map of chapter 5.
+    b_rise(b_tile(p, { x: 1060, y: 250, w: 380, h: 170, icon: 'overheid', lines: ['bestuur'], iconS: .85, iconY: 64, size: 24 }), tA);
+    show(b_dart(p, 410, 410, 1048, 336, { dash: true }), tA + .3);
+    b_rise(b_tile(p, { x: 1060, y: 510, w: 380, h: 170, icon: 'overheid', lines: ['controlerend orgaan'], iconS: .85, iconY: 64, size: 24 }), tG);
+    show(b_dart(p, 410, 470, 1048, 594, { dash: true }), tG + .3);
+    b_txt(p, 'EN / OF', 1250, 474, tG + 1, { size: 16, fill: COL.dim, weight: 700, font: MONO }).setAttribute('letter-spacing', '2');
+  }],
+
+  ['scholing', 'Scholing', (m) => {
+    const p = panel(0);
+    b_head(p, '5.04.01 · SCHOLING');
+    b_tab(3, .2);
+    b_kop(p, '5.04.01', 'scholing voor bestuur en werknemers');
+    const tA = m('allen'), tD = m('doel'), xs = [200, 310, 530, 640, 750, 860, 970];
+    // Two board members and five employees; every one of them is trained, again and again.
+    S.people = xs.map((x, i) => { const g = b_icon(p, 'persoon', { x, y: 330, s: 1.25, o: 0 }); show(g, .3 + i * .08); return g; });
+    b_txt(p, 'bestuur', 255, 414, .5, { size: 24, weight: 600 });
+    S.staff = b_txt(p, 'werknemers', 750, 414, .6, { size: 24, weight: 600 });
+    S.ticks = xs.map((x, i) => { const g = G(p, { o: 0 }); b_tick(g, x, 452); show(g, tA + .3 + i * .12); return g; });
+    S.often = G(p, { o: 0 });
+    b_icon(S.often, 'tijdlijn', { x: 1260, y: 330, s: 1.35, stroke: COL.task });
+    T(S.often, 'regelmatig', { x: 1260, y: 414, size: 24, weight: 600, fill: COL.task, anchor: 'middle' });
+    show(S.often, tA + .9);
+    // What the training is for.
+    S.goals = G(p);
+    b_kick(S.goals, 'CYBERBEVEILIGINGSRISICO’S', 150, COL.dim, tD, 524);
+    show(b_box(S.goals, 150, 540, 380, ['risico’s herkennen']), tD);
+    show(b_box(S.goals, 560, 540, 380, ['risico’s voorkomen']), m('voorkomen'));
+    show(b_box(S.goals, 970, 540, 500, ['weten wat te doen bij een incident']), m('inc'));
+  }],
+
+  ['kennis', 'Kennis van bestuurders', (m) => {
+    // Same picture: the employees step back, the board members come forward.
+    const p = S.panel, tT = m('toon'), tW = m('waarvoor');
+    hide(S.goals, 0, .4);
+    [...S.people.slice(2), ...S.ticks.slice(2), S.staff, S.often].forEach(e => tw(e, { o: .3 }, .3, .5));
+    S.people.slice(0, 2).forEach(g => tw(g._line, { c_stroke: COL.task }, .4, .4));
+    b_down(p, 255, 476, 528, tT, COL.task);
+    show(b_box(p, 150, 540, 440, ['tonen aan: voldoende', 'kennis en vaardigheden'], { col: COL.task, fill: COL.task, hgt: 96, size: 24 }), tT + .2);
+    b_arrow(p, 602, 668, 588, tW);
+    show(b_box(p, 680, 540, 790, ['om te beoordelen wat informatiebeveiligingsrisico’s betekenen', 'voor de diensten en producten van de organisatie'], { hgt: 96, weight: 500 }), tW + .3);
+  }],
+
+  ['contacten', 'Contacten', (m) => {
+    const p = panel(0);
+    b_head(p, '5.05.01 · CONTACT MET INSTANTIES');
+    b_tab(4, .2);
+    b_kop(p, '5.05.01', 'formele contacten over informatiebeveiliging');
+    const tO = m('over');
+    // The overview, schematic: which officer has formal contact with which body.
+    const sheet = G(p, { o: 0, y: 14 });
+    b_rect(sheet, 260, 240, 1080, 440, { fill: COL.panel });
+    [['OVERZICHT FORMELE CONTACTEN', 280, COL.dim], ['SCHEMATISCH', 660, COL.faint]].forEach(([str, y, fill]) =>
+      T(sheet, str, { x: 292, y, size: 15, fill, weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5'));
+    path(sheet, 'M292 298H1308', { stroke: COL.edge, 'stroke-width': 2 });
+    ['functionaris A', 'functionaris B', 'functionaris C'].forEach((str, i) => {
+      b_icon(sheet, 'persoon', { x: 340, y: 372 + i * 100, s: .8 });
+      T(sheet, str, { x: 392, y: 380 + i * 100, size: 23 });
+    });
+    ['overheidsinstantie A', 'toezichthouder', 'overheidsinstantie B'].forEach((str, i) => {
+      b_icon(sheet, 'overheid', { x: 1262, y: 372 + i * 100, s: .6 });
+      T(sheet, str, { x: 1200, y: 380 + i * 100, size: 23, anchor: 'end' });
+    });
+    b_rise(sheet, tO);
+    [[0, 0], [1, 1], [2, 1], [2, 2]].forEach(([a, b], k) =>
+      draw(path(p, `M580 ${372 + a * 100}C760 ${372 + a * 100} 780 ${372 + b * 100} 960 ${372 + b * 100}`, { stroke: COL.dim, 'stroke-width': 3 }, { d: 0 }), tO + 2.2 + k * .5, .6));
+    b_txt(p, 'welke functionaris heeft contact met welke instantie of toezichthouder', 800, 738, tO + 1, { size: 25 });
+    show(b_chip(p, 890, 254, 420, 'ten minste jaarlijks geactualiseerd', { col: COL.task, fill: COL.task, hgt: 38, size: 17, bg: COL.board }), m('jaar'));
+  }],
+
+  ['wijziging', 'Nieuw of gewijzigd', (m) => {
+    const p = panel(0);
+    b_head(p, '5.08.01 · NIEUWE SYSTEMEN EN WIJZIGINGEN');
+    b_tab(7, .2);
+    b_kop(p, '5.08.01', 'risicoafweging bij nieuw en gewijzigd');
+    const tR = m('ra'), tD = m('doel'), tE = m('eisen');
+    // Two occasions lead to the same step.
+    b_rise(b_tile(p, { x: 120, y: 250, w: 340, h: 200, icon: 'server', lines: ['nieuw informatiesysteem'], iconY: 78, iconS: 1.1 }), m('nieuw'));
+    b_rise(b_tile(p, { x: 120, y: 480, w: 340, h: 200, icon: 'tandwiel', lines: ['significante wijziging', 'van een bestaand systeem'], iconY: 66, iconS: 1.1 }), m('wijz'));
+    const gate = G(p, { o: 0, y: 14 });
+    b_rect(gate, 600, 340, 400, 250, { fill: COL.panel, stroke: COL.task, sw: 3 });
+    b_matrix(gate, 800, 410, 1.2);
+    T(gate, 'expliciete risicoafweging', { x: 800, y: 494, size: 27, weight: 600, fill: COL.task, anchor: 'middle' });
+    T(gate, 'volgens de vastgestelde', { x: 800, y: 530, size: 21, fill: COL.dim, anchor: 'middle' });
+    T(gate, 'risicomanagementmethodiek', { x: 800, y: 558, size: 21, fill: COL.dim, anchor: 'middle' });
+    b_rise(gate, tR);
+    show(b_dart(p, 470, 350, 588, 420), tR + .2); show(b_dart(p, 470, 580, 588, 510), tR + .2);
+    b_txt(p, 'ZIE HOOFDSTUK 3 · RISICOMANAGEMENT', 800, 626, tR + 1.6, { size: 14, fill: COL.faint, weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    // What the assessment is for.
+    show(b_dart(p, 1012, 420, 1128, 350), tD);
+    show(b_box(p, 1140, 270, 340, ['risico’s geïdentificeerd', 'en in voldoende mate', 'beheerst'], { hgt: 150, size: 22 }), tD + .2);
+    show(b_dart(p, 1012, 510, 1128, 580), tE);
+    show(b_box(p, 1140, 500, 340, ['beveiligingseisen', 'vastgesteld'], { hgt: 150, size: 22 }), tE + .2);
+  }],
+
+  ['q2', 'Controlevraag', () => {
+    // The five controls of this chapter that have government measures, as cards to point at.
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 5.01 TOT EN MET 5.08');
+    b_tab(-1, .2);
+    b_txt(p, 'de vijf beheersmaatregelen met overheidsmaatregelen', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.cards = C6_Q.map(([nr, icon, lines], i) => {
+      const g = b_tile(p, { x: c6_qX(i), y: 264, w: 268, h: 250, icon, lines, iconY: 112, iconS: 1.05, size: 21 });
+      T(g, nr, { x: c6_qX(i) + 134, y: 312, size: 26, fill: COL.task, weight: 700, anchor: 'middle', font: MONO });
+      b_rise(g, .3 + i * .1);
+      return g;
+    });
+  }, { ask: done => {
+    const items = S.cards.map((g, i) => ({ el: g, box: [c6_qX(i), 264, 268, 250], label: C6_Q[i][0] + ' ' + C6_Q[i][2].join(' ') }));
+    quiz(WIDE, [{
+      id: 'c-maatregel-1', prompt: ['Er komt een nieuw zaaksysteem. Welke maatregel vraagt nu om een risicoafweging?'],
+      build: pickEls(items, 4, '5.08.01: bij een nieuw informatiesysteem hoort een expliciete risicoafweging.', i => [
+        'Het beleid geeft de uitgangspunten. De risicoafweging bij een nieuw systeem staat in 5.08.01.',
+        'De rollen zeggen wie verantwoordelijk is. De risicoafweging zelf staat in 5.08.01.',
+        'Scholing gaat over kennis. De risicoafweging bij een nieuw systeem staat in 5.08.01.',
+        'Contacten gaan over instanties en toezichthouders. De risicoafweging staat in 5.08.01.', null][i]),
+    }, {
+      id: 'c-maatregel-2', prompt: ['Een bestuurder moet aantonen genoeg te weten om risico’s te beoordelen. Waar staat dat?'],
+      build: pickEls(items, 2, '5.04.01: bestuurders tonen aan dat ze voldoende kennis en vaardigheden hebben.', i => [
+        'Het bestuur stelt het beleid vast, maar het aantonen van kennis staat bij scholing: 5.04.01.',
+        'Bij rollen staat wie verantwoordelijk is. Het aantonen van kennis staat bij scholing: 5.04.01.', null,
+        'Contacten gaan over instanties en toezichthouders. Het aantonen van kennis staat bij scholing: 5.04.01.',
+        'Dat gaat over nieuwe systemen en wijzigingen. Het aantonen van kennis staat bij scholing: 5.04.01.'][i]),
+    }, {
+      id: 'c-maatregel-3', prompt: ['Welke functionaris heeft formeel contact met de toezichthouder? Waar is dat uitgewerkt?'],
+      build: pickEls(items, 3, '5.05.01: de organisatie heeft uitgewerkt wie met welke instanties en toezichthouders formele contacten heeft.', i => [
+        'Het beleid noemt de uitgangspunten. Wie contact heeft met welke toezichthouder, staat in het overzicht van 5.05.01.',
+        'Rollen gaan over verantwoordelijkheden binnen de organisatie. De contacten naar buiten staan in 5.05.01.',
+        'Scholing gaat over kennis. De contacten naar buiten staan in het overzicht van 5.05.01.', null,
+        'Dat gaat over nieuwe systemen en wijzigingen. De contacten naar buiten staan in 5.05.01.'][i]),
+    }], done);
+  } }],
+
+  ['wrap', 'Samenvatting', (m) => {
+    const p = panel(0);
+    b_head(p, 'SAMENVATTING');
+    hide(S.tabsG, 0, .4);
+    b_wrap(p, [
+      ['Het nummer wijst de weg.', 'Eerste drie cijfers: de beheersmaatregel uit ISO 27002. Daarna: het volgnummer.', 'w1'],
+      ['Overheidsmaatregelen zijn het verplichte minimum.', 'Een risicoanalyse laat zien of dat genoeg is.', 'w2'],
+      ['Het bestuur stelt beleid en rollen vast.', 'Het beleid wordt minimaal jaarlijks beoordeeld. Er is een CISO die onafhankelijk adviseert.', 'w3'],
+      ['Scholing voor bestuur en werknemers.', 'En een risicoafweging bij een nieuw systeem of een significante wijziging.', 'w4'],
+    ], m);
+  }],
+
+  ['final1', 'Oefenronde 1', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-stellingen', prompt: ['Klopt het, of klopt het niet?'],
+    build: grid([
+      { parts: ['In het nummer 5.02.01 verwijzen de eerste drie cijfers naar een beheersmaatregel uit ISO 27002.'], ans: ['k'], why: '5.02 verwijst naar beheersmaatregel 5.2; 01 is het volgnummer van de overheidsmaatregel.' },
+      { parts: ['Heeft een beheersmaatregel geen overheidsmaatregel, dan hoeft de organisatie er niets mee te doen.'], ans: ['n'], why: 'Is hij van toepassing, dan gebruik je de implementatierichtlijn uit ISO 27002.' },
+      { parts: ['Het informatiebeveiligingsbeleid wordt vastgesteld door het bestuur.'], ans: ['k'], why: 'En het wordt minimaal jaarlijks beoordeeld en zo nodig bijgesteld.' },
+      { parts: ['Scholing is er voor de werknemers; voor het bestuur geldt de maatregel niet.'], ans: ['n'], why: 'Het bestuur en de werknemers volgen regelmatig scholing; bestuurders tonen bovendien hun kennis aan.' },
+      { parts: ['Grijs gemarkeerde overheidsmaatregelen zijn vrijblijvend.'], ans: ['n'], why: 'Ze vallen niet onder de Cbw, maar er geldt verplichtende zelfregulering.' },
+    ], KN, { multi: false, text: true }),
+  }], done, 'Oefenronde 1 van 2') }],
+
+  ['final2', 'Oefenronde 2', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-minimum', prompt: ['De overheidsmaatregelen bij een beheersmaatregel zijn toegepast. Is dat genoeg?'],
+    build: choice([['Ja, meer dan het minimum is nooit nodig.'], ['Dat blijkt uit een risicoanalyse.'], ['Nee, er moet altijd meer gebeuren.']], 1,
+      'De overheidsmaatregelen zijn de verplichte minimale invulling. Een risicoanalyse laat zien of ze het risico voldoende beheersen.',
+      ['Het is een minimum. Of het genoeg is om het risico te beheersen, blijkt uit een risicoanalyse.', null,
+        'Niet altijd: uit een risicoanalyse blijkt of het minimum het risico voldoende beheerst.']),
+  }, {
+    id: 'p-afwijken', prompt: ['Een beheersmaatregel zonder overheidsmaatregel wordt niet toegepast. Wat hoort daarbij?'],
+    build: choice([['Een onderbouwing met een risicoanalyse, met een verwijzing in de verklaring van toepasselijkheid.'], ['Niets: zonder overheidsmaatregel is er geen verplichting.'], ['Een melding bij de toezichthouder.']], 0,
+      'Niet toepassen of afwijken wordt onderbouwd met een risicoanalyse; de verwijzing staat in de bijlage uitzonderingen van de verklaring van toepasselijkheid.',
+      [null, 'Ook zonder overheidsmaatregel wordt niet toepassen of afwijken onderbouwd met een risicoanalyse.',
+        'De BIO vraagt hier geen melding, maar een onderbouwing met een risicoanalyse en een verwijzing in de verklaring van toepasselijkheid.']),
+  }, {
+    id: 'p-eigenaar', prompt: ['Wie behandelt de risico’s van een bedrijfsmiddel?'],
+    build: choice([['De CISO.'], ['De lijnmanager of proceseigenaar die voor dat bedrijfsmiddel verantwoordelijk is.'], ['De leverancier van het bedrijfsmiddel.']], 1,
+      'Wie verantwoordelijk is voor een bedrijfsmiddel, is ook verantwoordelijk voor de behandeling van de risico’s ervan.',
+      ['De CISO adviseert en rapporteert. De risico’s behandelt de lijnmanager of proceseigenaar van het bedrijfsmiddel.', null,
+        'De organisatie blijft zelf verantwoordelijk: de lijnmanager of proceseigenaar van het bedrijfsmiddel behandelt de risico’s.']),
+  }], done, 'Oefenronde 2 van 2 · vraag') }],
+
+  ['finish', 'Afgerond', () => { panel(0); }, { ask: finishCard }],
+].map(([id, title, run, extra]) => ({ id, title, run, ...extra }));
+
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apparaten, malware en kwetsbaarheden · BIO2 in beeld</title>
+<link rel="stylesheet" href="../lib/engine.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2314171a'/%3E%3Cpath d='M15 52V38M27 52V20M39 52V32M51 52V14' stroke='%238d959d' stroke-width='7'/%3E%3Cpath d='M7 28H57' stroke='%23c9a45c' stroke-width='4'/%3E%3C/svg%3E">
+<link rel="expect" href="#bar" blocking="render"><!-- hold the first frame until the player exists, so the page transition can run -->
+</head>
+<body>
+<script src="../lib/engine.js"></script>
+<script src="audio/nl/timings.js"></script>
+<script>
+'use strict';
+// Hoofdstuk 13: de overheidsmaatregelen 8.01.01 tot en met 8.08.06 van de BIO2 (pagina 23 tot en met 25): mobiele
+// apparatuur, speciale bevoegdheden, informatie met specifiek belang, netwerktoegang voor leveranciers, malware en
+// kwetsbaarheden. Beat ids match content/bio2/ch13/narration.nl.json. One idea per beat.
+const CHAPTER = { number: 13, title: 'Apparaten, malware en kwetsbaarheden', minutes: 8, language: 'nl', next: '../ch14/' };
+
+/* ---------- chapter data (used by the helpers and inside BEATS, so defined first) ---------- */
+// The strip: the last four controls have no government measure and are one dashed step.
+const C13_TABS = ['8.01', '8.02', '8.03', '8.04', '8.05', '8.06', '8.07', '8.08', '8.09–8.12'];
+// Twelve controls of ISO 27002 (topics shortened, in our own words) with their government measures in the BIO2.
+const C13_CTRL = [
+  { code: '8.1', topic: ['apparaten van', 'gebruikers'], nrs: ['8.01.01', '8.01.02'] },
+  { code: '8.2', topic: ['speciale', 'toegangsrechten'], nrs: ['8.02.01'] },
+  { code: '8.3', topic: ['toegang tot informatie', 'beperken'], nrs: ['8.03.01', '8.03.02'] },
+  { code: '8.4', topic: ['toegang tot', 'broncode'], nrs: [] },
+  { code: '8.5', topic: ['beveiligde', 'authenticatie'], nrs: ['8.05.01'] },
+  { code: '8.6', topic: ['capaciteitsbeheer'], nrs: [] },
+  { code: '8.7', topic: ['bescherming', 'tegen malware'], nrs: ['8.07.01', '8.07.02', '8.07.03', '8.07.04'] },
+  { code: '8.8', topic: ['technische', 'kwetsbaarheden'], nrs: ['8.08.01', '8.08.02', '8.08.03', '8.08.04', '8.08.05', '8.08.06'] },
+  { code: '8.9', topic: ['configuratiebeheer'], nrs: [] },
+  { code: '8.10', topic: ['informatie wissen'], nrs: [] },
+  { code: '8.11', topic: ['gegevens maskeren'], nrs: [] },
+  { code: '8.12', topic: ['gegevenslekken', 'voorkomen'], nrs: [] },
+];
+// Four controls as cards for the first quick check: [number, icon, label].
+const C13_Q1 = [['8.01', 'telefoon', ['mobiele', 'apparatuur']], ['8.02', 'sleutel', ['speciale', 'bevoegdheden']], ['8.03', 'kluis', ['informatie met', 'specifiek belang']], ['8.05', 'bedrijf', ['toegang voor', 'leveranciers']]];
+// Four answers to 'when' as cards for the second quick check.
+const C13_Q2 = [['uiterlijk binnen', 'een week'], ['minimaal jaarlijks'], ['bij iedere release', 'of major update'], ['ieder kwartaal']];
+
+/* ---------- chapter drawing helpers (prefixed c13_; the shared b_ helpers live in ../lib/engine.js) ---------- */
+// The overview tile (b_ctrl), the dashed frame (b_dashed) and the line with four points (b_periodic) started here and
+// moved to the engine when chapter 14 needed them.
+
+/* ---------- beats: [id, title, run(m, D), { ask, hold }?] ---------- */
+const BEATS = [
+  ['intro', 'Apparaten en malware', (m, D) =>
+    b_title(m, D, 'DEEL C · MENS, GEBOUW EN TECHNIEK · HOOFDSTUK 13', 'Apparaten en malware', 'Mobiele apparatuur, toegang tot informatie, malware en kwetsbaarheden.')],
+
+  ['twaalf', '8.01 tot en met 8.12', (m) => {
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 8.01 TOT EN MET 8.12');
+    // The strip of this chapter. The controls without a government measure are dashed; the last four are one step.
+    b_tabs(C13_TABS, .4);
+    [3, 5, 8].forEach(b_tabNone);
+    const tZ = m('zes'), tG = m('geen');
+    let withNr = 0, without = 0;
+    C13_CTRL.forEach((c, i) => b_ctrl(p, c, 120 + (i % 4) * 346, 150 + Math.floor(i / 4) * 184, i,
+      c.nrs.length ? tZ + .2 + withNr++ * .25 : tG + .2 + without++ * .12));
+    b_source(p, 716);
+    b_txt(p, 'samen zestien overheidsmaatregelen', 800, 764, tZ + 1.8, { size: 27, weight: 600, fill: COL.task });
+  }],
+
+  ['zero', 'Mobiele apparatuur', (m) => {
+    const p = panel(0);
+    b_head(p, '8.01.01 · MOBIELE APPARATUUR');
+    b_tab(0, .2);
+    b_kop(p, '8.01.01', 'geen bedrijfsinformatie op het apparaat');
+    const tZ = m('zero'), tN = m('niets');
+    // The device, and where the business information stays: not on the device.
+    show(b_icon(p, 'telefoon', { x: 300, y: 400, s: 2.8, o: 0 }), .3);
+    b_txt(p, 'mobiel apparaat', 300, 530, .3, { size: 22, weight: 600 });
+    b_rise(b_sheet(p, 1000, 300, 420, 200, 'BEDRIJFSINFORMATIE', 3), .4);
+    b_arrow(p, 372, 986, 400, .8, { both: true });
+    show(put(b_rect(p, 270, 362, 60, 46, { stroke: COL.dim, rx: 4, 'stroke-dasharray': '6 5' }), { o: 0 }), tZ);
+    b_txt(p, 'niet standaard op het apparaat opgeslagen', 679, 372, tZ, { size: 22, weight: 600, fill: COL.task });
+    show(b_term(p, 'Zero footprint', 'zero-footprint', { x: 679, y: 458, size: 28, anchor: 'middle' }), tZ + 2.5);
+    b_txt(p, 'er blijft niets op achter', 679, 496, tN, { size: 21, fill: COL.dim });
+  }],
+
+  ['anders', 'Versleutelen en wissen', (m) => {
+    // Same picture: what holds when that is not (yet) possible, and what is always possible on mobile equipment.
+    const p = S.panel, tS = m('slot'), tW = m('wis');
+    show(b_icon(p, 'slot', { x: 164, y: 656, s: 1, o: 0, stroke: COL.task }), tS);
+    show(b_box(p, 216, 610, 560, ['kan dat (nog) niet: toegang beschermd,', 'met minimaal versleuteling van de gegevens'], { col: COL.task, fill: COL.task, hgt: 96, size: 21 }), tS);
+    show(b_box(p, 860, 610, 560, ['wissen op afstand is mogelijk'], { col: COL.task, fill: COL.task, hgt: 96, size: 23 }), tW);
+  }, { hold: true }],   // the lesson waits here: the English term of this picture can be heard before it goes on
+
+  ['mobiel', 'Drie dingen', (m) => {
+    const p = panel(0);
+    b_head(p, '8.01.02 · MOBIELE APPARATUUR');
+    b_kop(p, '8.01.02', 'minimaal drie dingen geregeld');
+    const ys = [300, 410, 550];
+    // Three things, numbered; each appears on its sentence.
+    const row = (k, main, t0) => {
+      const g = G(p, { o: 0 });
+      b_num(g, k + 1, 120, ys[k] - 24);
+      T(g, main, { x: 190, y: ys[k] + 8, size: 24, weight: 600 });
+      show(g, t0);
+      return g;
+    };
+    T(row(0, 'patchmanagement en hardening', m('a1')), 'het apparaat maakt er deel van uit', { x: 190, y: ys[0] + 40, size: 19, fill: COL.dim });
+    const r2 = row(1, 'MDM- of MAM-oplossingen', m('a2'));
+    b_term(r2, 'Mobile Device Management', 'mobile-device-management', { x: 190, y: ys[1] + 44, size: 20, o: 1 });
+    b_term(r2, 'Mobile Application Management', 'mobile-application-management', { x: 190, y: ys[1] + 80, size: 20, o: 1 });
+    T(row(2, 'gebruikersovereenkomst', m('a3')), 'voor mobiel werken, getekend door de gebruiker', { x: 190, y: ys[2] + 40, size: 19, fill: COL.dim });
+  }],
+
+  ['overeenkomst', 'De overeenkomst', (m) => {
+    // Same picture: what users declare in the agreement, and the periodic check of the three points.
+    const p = S.panel, tB = m('bewust'), tV = m('veilig'), tA = m('alle'), tT = m('toets');
+    b_arrow(p, 500, 846, 552, .4, { stroke: COL.task });
+    b_rise(b_sheet(p, 860, 262, 600, 330, 'GEBRUIKERSOVEREENKOMST MOBIEL WERKEN'), .3);
+    show(b_box(p, 888, 330, 544, ['bewust van de gevaren van mobiel werken'], { hgt: 62, size: 21 }), tB);
+    show(b_box(p, 888, 406, 544, ['verklaart het veilig te zullen doen'], { hgt: 62, size: 21 }), tV);
+    b_txt(p, 'geldt voor alle mobiele apparatuur', 888, 512, tA, { size: 20, fill: COL.dim, anchor: 'start' });
+    b_txt(p, 'die de medewerker zakelijk gebruikt', 888, 540, tA, { size: 20, fill: COL.dim, anchor: 'start' });
+    show(put(b_caps(p, 'PERIODIEK GETOETST', 120, 672, { fill: COL.task }), { o: 0 }), tT);
+    b_periodic(p, 120, 700, 706, tT);
+    b_txt(p, 'worden de drie punten nageleefd?', 860, 714, tT + .6, { size: 22, weight: 600, anchor: 'start' });
+  }, { hold: true }],   // the lesson waits here: the two English terms of this picture can be heard
+
+  ['bevoegd', 'Speciale bevoegdheden', (m) => {
+    const p = panel(0);
+    b_head(p, '8.02.01 · SPECIALE BEVOEGDHEDEN');
+    b_tab(1, .2);
+    b_kop(p, '8.02.01', 'speciale bevoegdheden beoordelen');
+    const tO = m('obw'), tK = m('kwart'), cx = 1230, cy = 420, R = 110;
+    b_rise(b_tile(p, { x: 120, y: 290, w: 360, h: 250, icon: 'sleutel', lines: ['toegewezen of gebruikte', 'speciale bevoegdheden'], iconY: 90, iconS: 1.5, size: 21 }), .3);
+    // Assessed in design, existence and operation (chapter 2).
+    b_arrow(p, 494, 606, 415, tO);
+    show(put(b_caps(p, 'BEOORDEELD IN', 620, 290), { o: 0 }), tO);
+    ['opzet', 'bestaan', 'werking'].forEach((str, k) => {
+      show(b_box(p, 620, 304 + k * 84, 260, [str], { hgt: 66 }), tO + 3.6 + k * .8);
+      show(put(b_tick(p, 916, 337 + k * 84), { o: 0 }), tO + 3.9 + k * .8);
+    });
+    // At least every quarter: four points on the year.
+    const ring = b_year(p, cx, cy, R, '');
+    T(ring, 'ieder kwartaal', { x: cx, y: cy + 7, size: 20, fill: COL.task, weight: 600, anchor: 'middle' });
+    show(ring, tK - .4);
+    [0, 1, 2, 3].forEach(q => show(put(mk('circle', { cx: cx + R * Math.sin(q * Math.PI / 2), cy: cy - R * Math.cos(q * Math.PI / 2), r: 10, fill: COL.task }, p), { o: 0 }), tK + q * .35));
+    b_txt(p, 'minimaal ieder kwartaal', cx, cy + R + 60, tK + .6, { size: 23, weight: 600, fill: COL.task });
+  }],
+
+  ['isoleren', 'Isoleren', (m) => {
+    const p = panel(0);
+    S.hd = b_head(p, '8.03.01 · INFORMATIE MET SPECIFIEK BELANG');
+    b_tab(2, .2);
+    S.kop = b_kop(p, '8.03.01', 'informatie met specifiek belang isoleren');
+    const tI = m('iso'), tF = m('fys'), tL = m('log');
+    // All information, schematic, and set apart inside it the information with a specific interest.
+    const all = G(p, { o: 0 });
+    b_rect(all, 760, 262, 700, 440, { fill: COL.panel });
+    b_caps(all, 'INFORMATIE', 788, 302);
+    b_caps(all, 'SCHEMATISCH', 1432, 684, { fill: COL.faint, anchor: 'end' });
+    [[850, 400], [850, 520], [910, 630]].forEach(([x, y]) => b_icon(all, 'doc', { x, y, s: 1, stroke: COL.dim }));
+    show(all, .3);
+    const spec = G(p, { o: 0 });
+    b_rect(spec, 980, 330, 440, 300, { fill: COL.board, stroke: COL.task, sw: 3 });
+    b_caps(spec, 'INFORMATIE MET SPECIFIEK BELANG', 1004, 366, { fill: COL.task });
+    S.parts = [...'ABC'].map((ch, k) => {
+      const frame = b_rect(spec, 1010, 386 + k * 74, 380, 56, { fill: COL.panel, rx: 6 });
+      T(spec, 'deel ' + ch, { x: 1034, y: 422 + k * 74, size: 21 });
+      return frame;
+    });
+    show(spec, 1);
+    show(put(b_caps(p, 'GEÏSOLEERD', 120, 300, { fill: COL.task }), { o: 0 }), tI);
+    show(b_box(p, 120, 316, 220, ['fysiek'], { col: COL.task, fill: COL.task }), tF);
+    b_txt(p, 'en/of', 384, 356, tL, { size: 21, fill: COL.dim });
+    show(b_box(p, 428, 316, 220, ['logisch'], { col: COL.task, fill: COL.task }), tL);
+  }],
+
+  ['nodig', 'Alleen wat nodig is', (m) => {
+    // Same picture: each user reaches only the part that the task needs.
+    const p = S.panel, tA = m('alleen'), tT = m('taak');
+    hide(S.kop, 0, .3); hide(S.hd, 0, .3);
+    b_head(p, '8.03.02 · INFORMATIE MET SPECIFIEK BELANG', .3);
+    b_kop(p, '8.03.02', 'alleen wat nodig is voor de taak', .3);
+    [['A', 500, 0], ['B', 640, 2]].forEach(([ch, y, part], k) => {
+      const g = G(p, { o: 0 });
+      b_icon(g, 'persoon', { x: 170, y, s: 1 });
+      T(g, 'gebruiker ' + ch, { x: 226, y: y - 2, size: 22, weight: 600 });
+      T(g, 'taak: deel ' + 'ABC'[part], { x: 226, y: y + 26, size: 19, fill: COL.dim });
+      show(g, tA + k * .6);
+      show(b_dart(p, 400, y, 1000, 414 + part * 74, { stroke: COL.task }), tT + k * .6);
+      tw(S.parts[part], { c_stroke: COL.task }, tT + k * .6, .4);
+    });
+    b_txt(p, 'alleen inzien en verwerken wat nodig is voor de taak', 430, 744, tT + 1.4, { size: 22, weight: 600, fill: COL.task });
+  }],
+
+  ['leverancier', 'Leveranciers', (m) => {
+    const p = panel(0);
+    b_head(p, '8.05.01 · TOEGANG VOOR LEVERANCIERS');
+    b_tab(4, .2);
+    b_kop(p, '8.05.01', 'netwerktoegang voor externe leveranciers');
+    const tV = m('vooraf'), tW = m('voorw'), tL = m('lang'), tR = m('reg');
+    show(b_party(p, 230, 420, 'bedrijf', 'externe leverancier', { s: 1.4, lab: 90 }), .3);
+    const net = G(p, { o: 0 });
+    b_rect(net, 1090, 290, 370, 260, { fill: COL.panel });
+    b_caps(net, 'HET NETWERK', 1118, 330);
+    [1190, 1360].forEach(x => b_icon(net, 'server', { x, y: 440, s: 1 }));
+    show(net, .3);
+    b_arrow(p, 340, 456, 420, .8);
+    // In between: a risk assessment beforehand, which sets the conditions and the duration.
+    show(b_box(p, 470, 300, 460, ['vooraf: een risicoafweging'], { col: COL.task, fill: COL.task, hgt: 64 }), tV);
+    show(put(b_matrix(p, 896, 332, .6), { o: 0 }), tV);
+    show(b_box(p, 470, 380, 460, ['onder welke voorwaarden'], { hgt: 60, size: 22 }), tW);
+    show(b_box(p, 470, 454, 460, ['voor hoelang'], { hgt: 60, size: 22 }), tL);
+    b_arrow(p, 944, 1076, 420, tL + .8, { stroke: COL.task });
+    // And a registration that shows how the rights were granted.
+    b_down(p, 700, 524, 566, tR, COL.task);
+    b_rise(b_sheet(p, 470, 578, 460, 110, 'REGISTRATIE', 1), tR);
+    b_txt(p, 'hoe de rechten zijn toegekend', 498, 668, tR + .4, { size: 20, weight: 600, fill: COL.task, anchor: 'start' });
+  }],
+
+  ['q1', 'Controlevraag', () => {
+    // Four controls of the first half as cards to point at.
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 8.01 TOT EN MET 8.05');
+    b_tab(-1, .2);
+    b_txt(p, 'apparaten en toegang', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.cards = b_cards(p, C13_Q1);
+  }, { ask: done => {
+    const items = b_cardItems(S.cards, C13_Q1);
+    const about = ['Dat gaat over mobiele apparatuur.', 'Dat gaat over speciale bevoegdheden.', 'Dat gaat over informatie met specifiek belang.', 'Dat gaat over netwerktoegang voor leveranciers.'];
+    quiz(WIDE, [{
+      id: 'c-toegang-1', prompt: ['De rechten van een beheerder zijn een half jaar niet bekeken. Welke maatregel geldt?'],
+      build: pickEls(items, 1, '8.02.01: speciale bevoegdheden worden minimaal ieder kwartaal beoordeeld, in opzet, bestaan en werking.',
+        i => about[i] + ' Het beoordelen van speciale bevoegdheden staat in 8.02.01.'),
+    }, {
+      id: 'c-toegang-2', prompt: ['Een leverancier wil op afstand in het netwerk om een storing op te lossen. Welke maatregel?'],
+      build: pickEls(items, 3, '8.05.01: vooraf een risicoafweging, die de voorwaarden en de duur bepaalt; de rechten staan in een registratie.',
+        i => about[i] + ' Netwerktoegang voor externe leveranciers staat in 8.05.01.'),
+    }, {
+      id: 'c-toegang-3', prompt: ['Op een tablet van de buitendienst staan dossiers lokaal opgeslagen. Welke maatregel geldt?'],
+      build: pickEls(items, 0, '8.01.01: bedrijfsinformatie wordt niet standaard op het apparaat opgeslagen; kan dat niet, dan minimaal versleuteling.',
+        i => about[i] + ' Opslag op mobiele apparatuur staat in 8.01.01.'),
+    }], done);
+  } }],
+
+  ['download', 'Downloaden', (m) => {
+    const p = panel(0);
+    b_head(p, '8.07.01 · MALWARE');
+    b_tab(6, .2);
+    b_kop(p, '8.07.01', 'downloaden beheerst en beperkt');
+    const tB = m('beperkt'), tA = m('basis'), tS = m('scan');
+    show(b_party(p, 200, 400, 'wereld', 'internet', { s: 1.4, lab: 84 }), .3);
+    show(b_party(p, 1380, 400, 'laptop', 'gebruiker', { s: 1.4, lab: 84 }), .3);
+    b_arrow(p, 280, 396, 400, .6);
+    show(b_box(p, 410, 350, 330, ['downloaden:', 'beheerst en beperkt'], { col: COL.task, fill: COL.task, hgt: 100, size: 22 }), tB);
+    // On what basis: the risk, and what the use needs.
+    show(put(b_caps(p, 'OP BASIS VAN', 410, 500), { o: 0 }), tA);
+    show(b_box(p, 410, 514, 150, ['het risico'], { hgt: 56, size: 21 }), tA);
+    b_txt(p, 'en', 588, 550, tA + 1.2, { size: 20, fill: COL.dim });
+    show(b_term(p, 'need-of-use', 'need-of-use', { x: 622, y: 550, size: 23 }), tA + 1.4);
+    b_txt(p, 'wat voor het gebruik nodig is', 622, 582, tA + 1.4, { size: 18, fill: COL.dim, anchor: 'start' });
+    // And the antimalware software always looks at every download.
+    b_arrow(p, 752, 846, 400, tS);
+    const scan = G(p, { o: 0, y: 14 });
+    b_rect(scan, 860, 350, 400, 100, { fill: COL.panel, stroke: COL.task, sw: 3 });
+    b_icon(scan, 'schild', { x: 912, y: 400, s: .9, stroke: COL.task });
+    T(scan, 'antimalware-software', { x: 960, y: 392, size: 22, weight: 600, fill: COL.task });
+    T(scan, 'beoordeelt altijd alle downloads', { x: 960, y: 422, size: 18 });
+    b_rise(scan, tS);
+    b_arrow(p, 1272, 1306, 400, tS + .8);
+  }, { hold: true }],   // the lesson waits here: the English term can be heard before it goes on
+
+  ['voorlichten', 'Voorlichten', (m) => {
+    const p = panel(0);
+    b_head(p, '8.07.02 · MALWARE');
+    b_kop(p, '8.07.02', 'gebruikers voorlichten');
+    const tV = m('voor'), tK = m('klik');
+    b_rise(b_tile(p, { x: 120, y: 290, w: 300, h: 220, icon: 'les', lines: ['voorlichting'], iconY: 90, iconS: 1.5 }), .3);
+    b_arrow(p, 434, 536, 400, tV);
+    const users = G(p, { o: 0 });
+    [600, 700, 800].forEach(x => b_icon(users, 'persoon', { x, y: 390, s: 1.1 }));
+    T(users, 'gebruikers', { x: 700, y: 470, size: 22, weight: 600, anchor: 'middle' });
+    show(users, tV);
+    show(put(b_caps(p, 'OVER DE RISICO’S VAN', 980, 316), { o: 0 }), tV + 1);
+    show(b_box(p, 980, 330, 460, ['surfgedrag'], { col: COL.bad, fill: COL.bad, hgt: 66 }), tV + 1.8);
+    show(b_box(p, 980, 412, 460, ['klikken op onbekende links'], { col: COL.bad, fill: COL.bad, hgt: 66 }), tK);
+  }],
+
+  ['actueel', 'Actueel houden', (m) => {
+    const p = panel(0);
+    b_head(p, '8.07.03 · MALWARE');
+    b_kop(p, '8.07.03', 'software actueel houden');
+    const tA = m('act'), tU = m('upd');
+    [['schild', 'antimalware-software', 200], ['doorgaan', 'herstelsoftware', 700]].forEach(([icon, name, x], k) => {
+      b_rise(b_tile(p, { x, y: 280, w: 420, h: 200, icon, lines: [name], iconY: 80, iconS: 1.3 }), .3 + k * .2);
+      show(put(b_tick(p, x + 380, 312), { o: 0 }), tA + 1 + k * 1.2);
+    });
+    b_txt(p, 'actueel', 660, 530, tA + 2.6, { size: 26, weight: 600, fill: COL.task });
+    b_periodic(p, 200, 1120, 610, tU);
+    b_txt(p, 'ondersteund met periodieke updates', 660, 672, tU + .4, { size: 23, weight: 600 });
+  }],
+
+  ['scannen', 'Waar gescand wordt', (m) => {
+    const p = panel(0);
+    b_head(p, '8.07.04 · MALWARE');
+    b_kop(p, '8.07.04', 'waar de malwarescan plaatsvindt');
+    const ys = [322, 468, 628];
+    show(put(b_caps(p, 'MALWARESCAN', 1400, 262, { fill: COL.task, anchor: 'middle' }), { o: 0 }), m('s1'));
+    // Three places, numbered; each appears on its sentence, with what is scanned there.
+    const row = (k, main, subs, icons, t0) => {
+      const y = ys[k], g = G(p, { o: 0 });
+      b_num(g, k + 1, 120, y - 24);
+      T(g, main, { x: 190, y: y + 2, size: 24, weight: 600 });
+      subs.forEach((str, n) => T(g, str, { x: 190, y: y + 32 + n * 25, size: 19, fill: COL.dim }));
+      icons.forEach((name, n) => b_icon(g, name, { x: 900 + n * 120, y: y + 14, s: .9 }));
+      path(g, `M${900 + icons.length * 120 - 56} ${y + 14}H1346`, { stroke: COL.dim, 'stroke-width': 3 });
+      b_icon(g, 'schild', { x: 1400, y: y + 14, s: 1, stroke: COL.task });
+      show(g, t0);
+    };
+    row(0, 'alle omgevingen', ['bijvoorbeeld (mail)servers, (desktop)computers', 'en bij de toegangsverlening tot het netwerk'], ['server', 'laptop', 'keten'], m('s1'));
+    row(1, 'alle gedownloade content', ['voorafgaand aan executie of opslag'], ['wereld', 'doc'], m('s2'));
+    row(2, 'alle ontvangen bestanden', ['via netwerken of via elk opslagmedium,', 'vóór gebruik of opslag in de eigen omgeving'], ['keten', 'usb'], m('s3'));
+  }],
+
+  ['week', 'Binnen een week', (m) => {
+    const p = panel(0);
+    S.hd = b_head(p, '8.08.01 · KWETSBAARHEDEN');
+    b_tab(7, .2);
+    S.kop = b_kop(p, '8.08.01', 'bij hoog risico: binnen een week');
+    const tW = m('waarsch'), tH = m('hoog'), tS = m('snel'), tK = m('week'), x0 = 760, x1 = 1390;
+    show(b_box(p, 120, 270, 440, ['kwetsbaarheidswaarschuwing'], { col: COL.bad, fill: COL.bad, hgt: 66 }), tW);
+    // Both are high: the chance of abuse and the expected damage.
+    ['kans op misbruik', 'verwachte schade'].forEach((str, k) => {
+      const y = 370 + k * 76, g = G(p, { o: 0 });
+      b_rect(g, 120, y, 440, 60, { fill: COL.panel, rx: 6 });
+      T(g, str, { x: 144, y: y + 38, size: 22, weight: 600 });
+      put(b_chip(g, 440, y + 11, 100, 'hoog', { col: COL.bad, fill: COL.bad, hgt: 38, size: 17 }), { o: 1 });
+      show(g, tH + k * 1.6);
+    });
+    b_arrow(p, 574, 740, 340, tS, { stroke: COL.task });
+    // A week: measures as soon as possible, and within the week at the latest.
+    show(put(b_caps(p, 'PASSENDE MITIGERENDE MAATREGELEN', x0, 300, { fill: COL.task }), { o: 0 }), tS);
+    const line = G(p, { o: 0 });
+    path(line, `M${x0} 340H${x1 + 50}`, { stroke: COL.edge, 'stroke-width': 3 });
+    for (let d = 0; d <= 7; d++) path(line, `M${x0 + d * 90} ${d % 7 ? 332 : 328}V${d % 7 ? 348 : 352}`, { stroke: COL.dim, 'stroke-width': d % 7 ? 2 : 3 });
+    T(line, 'nu', { x: x0, y: 384, size: 18, fill: COL.dim, anchor: 'middle', font: MONO });
+    T(line, '1 week', { x: x1, y: 384, size: 18, fill: COL.dim, anchor: 'middle', font: MONO });
+    show(line, tS - .3);
+    draw(path(p, `M${x0} 340H${x1}`, { stroke: COL.task, 'stroke-width': 9 }, { d: 0 }), tS + .3, 1.6);
+    b_txt(p, 'zo snel mogelijk, uiterlijk binnen een week', x0, 436, tK, { size: 23, weight: 600, fill: COL.task, anchor: 'start' });
+  }],
+
+  ['wijze', 'Op welke wijze', (m) => {
+    // Same picture: how the measures are taken is decided with an explicit weighing of risks.
+    const p = S.panel, tA = m('afw');
+    hide(S.kop, 0, .3); hide(S.hd, 0, .3);
+    S.hd = b_head(p, '8.08.02 · KWETSBAARHEDEN', .3);
+    S.kop = b_kop(p, '8.08.02', 'op welke wijze', .3);
+    show(put(b_caps(p, 'OP WELKE WIJZE', 760, 486), { o: 0 }), tA);
+    show(b_box(p, 760, 500, 680, ['bepaald met een expliciete risicoafweging'], { col: COL.task, fill: COL.task, hgt: 70, size: 22 }), tA);
+    show(put(b_matrix(p, 1400, 535, .6), { o: 0 }), tA);
+  }],
+
+  ['tussentijd', 'In de tussentijd', (m) => {
+    // Same picture: also in the meantime, and when installing within a week is not possible.
+    const p = S.panel, tT = m('tussen'), tN = m('niet'), tM = m('mit');
+    hide(S.kop, 0, .3); hide(S.hd, 0, .3);
+    b_head(p, '8.08.03 · KWETSBAARHEDEN', .3);
+    b_kop(p, '8.08.03', 'in de tussentijd', .3);
+    show(b_dashed(p, 760, 606, 240, ['in de tussentijd']), tT);
+    show(b_dashed(p, 1012, 606, 440, ['installeren binnen een week niet mogelijk']), tN);
+    b_txt(p, 'ook dan mitigerende maatregelen,', 760, 706, tM, { size: 21, weight: 600, fill: COL.task, anchor: 'start' });
+    b_txt(p, 'op basis van een expliciete risicoafweging', 760, 734, tM, { size: 21, weight: 600, fill: COL.task, anchor: 'start' });
+  }],
+
+  ['jaarlijks', 'Jaarlijks controleren', (m) => {
+    const p = panel(0);
+    b_head(p, '8.08.04 · KWETSBAARHEDEN');
+    b_kop(p, '8.08.04', 'systemen jaarlijks controleren');
+    const tJ = m('jaar'), tN = m('norm'), tF = m('feit'), tH = m('hoe');
+    show(b_party(p, 220, 400, 'server', 'informatiesystemen', { s: 1.5, lab: 88 }), .3);
+    show(put(b_caps(p, 'WAAR MOGELIJK', 480, 282, { fill: COL.task, anchor: 'middle' }), { o: 0 }), tJ);
+    b_yearly(p, 480, 400, 84, tJ);
+    b_arrow(p, 580, 626, 400, tN - .2);
+    show(put(b_caps(p, 'GECONTROLEERD OP', 640, 316), { o: 0 }), tN - .2);
+    show(b_box(p, 640, 330, 560, ['technische naleving van beveiligingsnormen'], { hgt: 64, size: 22 }), tN);
+    show(b_box(p, 640, 408, 560, ['risico’s van de feitelijke veiligheid'], { hgt: 64, size: 22 }), tF);
+    // Examples of how: dashed, because the source gives them as examples.
+    show(put(b_caps(p, 'BIJVOORBEELD MET', 640, 548), { o: 0 }), tH);
+    [['kwetsbaarheidsanalyses', 640, 300], ['penetratietesten', 952, 230], ['red-teamingstesten', 1194, 250]].forEach(([str, x, w], k) => show(b_dashed(p, x, 562, w, [str]), tH + .6 + k * 1.3));
+  }],
+
+  ['continu', 'Aan internet', (m, D) => {
+    const p = panel(0);
+    S.hd = b_head(p, '8.08.04 · KWETSBAARHEDEN');
+    S.kop = b_kop(p, '8.08.04', 'vanaf internet bereikbaar: continu testen');
+    const tC = m('cont'), cx = 430, cy = 420, R = 120;
+    show(b_party(p, 160, 420, 'wereld', 'internet', { s: 1.2, lab: 76 }), .3);
+    show(put(path(p, 'M214 420H376', { stroke: COL.dim, 'stroke-width': 3 }), { o: 0 }), .5);
+    const sys = G(p, { o: 0 });
+    b_icon(sys, 'server', { x: cx, y: cy - 14, s: 1.2 });
+    b_term(sys, 'internet-facing', 'internet-facing', { x: cx, y: cy + 56, size: 19, anchor: 'middle', fill: COL.dim, o: 1 });
+    show(sys, .4);
+    // Tested continuously, where possible: a point keeps going round the system.
+    show(put(mk('circle', { cx, cy, r: R, fill: 'none', stroke: COL.task, 'stroke-width': 3 }, p), { o: 0 }), tC);
+    const dot = G(p, { o: 0 });
+    mk('circle', { r: 8, fill: COL.task }, dot);
+    const at = a => put(dot, { x: cx + R * Math.sin(a), y: cy - R * Math.cos(a), o: 1 });
+    prog(q => at(q * (D - tC) * 1.2), tC + .3, D - tC - .3, lin);
+    S.spin = { at, a0: (D - tC) * 1.2 };
+    b_txt(p, 'waar mogelijk continu getest', cx, cy + R + 50, tC + .4, { size: 22, weight: 600, fill: COL.task });
+    b_txt(p, 'op zwakheden en kwetsbaarheden', cx, cy + R + 80, tC + .4, { size: 20 });
+  }],
+
+  ['release', 'Bij iedere release', (m, D) => {
+    // Same picture: a penetration test at every release, no production with an open high risk, and a test every year.
+    const p = S.panel, tR = m('rel'), tH = m('hoog'), tP = m('prod'), tJ = m('jaar');
+    hide(S.kop, 0, .3); hide(S.hd, 0, .3);
+    b_head(p, '8.08.05 · KWETSBAARHEDEN', .3);
+    b_kop(p, '8.08.05', 'pentest bij iedere release', .3);
+    prog(q => S.spin.at(S.spin.a0 + q * D * 1.2), 0, D, lin);
+    show(b_box(p, 740, 290, 330, ['nieuwe release', 'of major update'], { hgt: 90, size: 21 }), tR + .4);
+    b_arrow(p, 1082, 1126, 335, tR + 2.4);
+    show(b_box(p, 1140, 290, 320, ['penetratietest', 'verplicht'], { col: COL.task, fill: COL.task, hgt: 90, size: 21 }), tR + 2.6);
+    b_txt(p, 'waar mogelijk geautomatiseerd', 1300, 410, tR + 4.4, { size: 19, fill: COL.dim });
+    show(b_box(p, 740, 450, 410, ['bevinding met hoog risico,', 'niet anders te mitigeren'], { col: COL.bad, fill: COL.bad, hgt: 90, size: 21 }), tH);
+    b_arrow(p, 1162, 1216, 495, tP);
+    show(b_box(p, 1230, 460, 230, ['productie'], { hgt: 70, size: 22 }), tP);
+    draw(path(p, 'M1222 540L1468 450', { stroke: COL.bad, 'stroke-width': 5 }, { d: 0 }), tP + .5, .5);
+    b_txt(p, 'niet in productie', 1345, 568, tP + .6, { size: 20, weight: 600, fill: COL.bad });
+    show(b_box(p, 740, 620, 720, ['alle internetfacing-systemen: minimaal jaarlijks getest'], { col: COL.task, fill: COL.task, hgt: 64, size: 21 }), tJ);
+  }, { hold: true }],   // the lesson waits here: the English term of this picture can be heard before it goes on
+
+  ['cvd', 'Meldingen van buiten', (m) => {
+    const p = panel(0);
+    b_head(p, '8.08.06 · KWETSBAARHEDEN');
+    b_kop(p, '8.08.06', 'zie de CVD-procedure');
+    const tZ = m('zie');
+    show(b_chip(p, 200, 380, 200, '8.08.06', { col: COL.task, fill: COL.task, hgt: 60, size: 24 }), .3);
+    b_arrow(p, 414, 566, 410, tZ, { stroke: COL.task });
+    b_txt(p, 'zie', 490, 390, tZ, { size: 21, weight: 600, fill: COL.task });
+    // The measure only refers to 5.24.08: the procedure for reports from outside (chapter 10).
+    const proc = b_sheet(p, 580, 290, 760, 240, 'PROCEDURE · HOOFDSTUK 10');
+    put(b_chip(proc, 608, 350, 160, '5.24.08', { col: COL.task, fill: COL.task, hgt: 50, size: 22 }), { o: 1 });
+    T(proc, 'CVD-procedure', { x: 790, y: 384, size: 26, weight: 600 });
+    T(proc, 'gecoördineerd bekendmaken van kwetsbaarheden', { x: 608, y: 446, size: 21, fill: COL.dim });
+    T(proc, 'voor meldingen van buiten', { x: 608, y: 478, size: 21, fill: COL.dim });
+    b_rise(proc, tZ + .3);
+  }],
+
+  ['q2', 'Controlevraag', () => {
+    // Four answers to 'when' as cards to point at: within a week, every year, at every release, every quarter.
+    const p = panel(0);
+    b_head(p, '8.02 EN 8.08 · WANNEER');
+    b_tab(-1, .2);
+    b_txt(p, 'wanneer of hoe vaak', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.cards = C13_Q2.map((lines, i) => {
+      const x = b_cardX(i), cx = x + 150, g = b_tile(p, { x, y: 264, w: 300, h: 250, lines, size: 21, textY: lines.length > 1 ? 440 : 454 });
+      if (i === 0) {
+        path(g, `M${x + 38} 350H${x + 262}`, { stroke: COL.edge, 'stroke-width': 3 });
+        for (let d = 0; d <= 7; d++) path(g, `M${x + 38 + d * 32} 340V360`, { stroke: COL.dim, 'stroke-width': 2 });
+        path(g, `M${x + 38} 350H${x + 262}`, { stroke: COL.task, 'stroke-width': 8 });
+      } else if (i === 2) b_icon(g, 'code', { x: cx, y: 350, s: 1.3 });
+      else {
+        put(b_year(g, cx, 350, 54, ''), { o: 1 });
+        (i === 1 ? [0] : [0, 1, 2, 3]).forEach(q => mk('circle', { cx: cx + 54 * Math.sin(q * Math.PI / 2), cy: 350 - 54 * Math.cos(q * Math.PI / 2), r: 9, fill: COL.task }, g));
+      }
+      b_rise(g, .3 + i * .1);
+      return g;
+    });
+  }, { ask: done => {
+    const items = S.cards.map((g, i) => ({ el: g, box: [b_cardX(i), 264, 300, 250], label: C13_Q2[i].join(' ') }));
+    quiz(WIDE, [{
+      id: 'c-wanneer-1', prompt: ['Kans op misbruik en verwachte schade zijn allebei hoog. Wanneer zijn er maatregelen?'],
+      build: pickEls(items, 0, '8.08.01: zo snel mogelijk, maar uiterlijk binnen een week.', i => [null,
+        'Jaarlijks geldt voor het testen van systemen. Bij hoog risico: zo snel mogelijk, uiterlijk binnen een week.',
+        'Dat is het moment van de verplichte pentest. Bij hoog risico: zo snel mogelijk, uiterlijk binnen een week.',
+        'Ieder kwartaal geldt voor speciale bevoegdheden. Bij hoog risico: uiterlijk binnen een week.'][i]),
+    }, {
+      id: 'c-wanneer-2', prompt: ['Wanneer is een pentest verplicht voor een systeem dat vanaf internet bereikbaar is?'],
+      build: pickEls(items, 2, '8.08.05: bij iedere nieuwe release of major update, waar mogelijk geautomatiseerd.', i => [
+        'Binnen een week geldt voor maatregelen bij een hoog risico. De pentest: bij iedere nieuwe release of major update.',
+        'Jaarlijks worden deze systemen getest; de verplichte pentest komt bij iedere nieuwe release of major update.', null,
+        'Ieder kwartaal geldt voor speciale bevoegdheden. De pentest: bij iedere nieuwe release of major update.'][i]),
+    }, {
+      id: 'c-wanneer-3', prompt: ['Hoe vaak worden speciale bevoegdheden beoordeeld?'],
+      build: pickEls(items, 3, '8.02.01: minimaal ieder kwartaal, in opzet, bestaan en werking.', i => [
+        'Binnen een week geldt voor maatregelen bij een hoog risico. Speciale bevoegdheden: minimaal ieder kwartaal.',
+        'Jaarlijks geldt voor het testen van systemen. Speciale bevoegdheden: minimaal ieder kwartaal.',
+        'Dat is het moment van de pentest. Speciale bevoegdheden: minimaal ieder kwartaal.', null][i]),
+    }], done);
+  } }],
+
+  ['wrap', 'Samenvatting', (m) => {
+    const p = panel(0);
+    b_head(p, 'SAMENVATTING');
+    hide(S.tabsG, 0, .4);
+    b_wrap(p, [
+      ['Mobiele apparatuur: geen bedrijfsinformatie op het apparaat.', 'Anders minimaal versleuteling; wissen op afstand; beheer en een gebruikersovereenkomst.', 'w1'],
+      ['Toegang alleen waar het nodig is.', 'Speciale bevoegdheden ieder kwartaal beoordeeld; leveranciers pas na een risicoafweging.', 'w2'],
+      ['Malware: beperken, voorlichten, scannen.', 'Downloads beheerst, software actueel, en alles wordt gescand vóór gebruik of opslag.', 'w3'],
+      ['Kwetsbaarheden: bij hoog risico binnen een week.', 'Systemen jaarlijks getest; vanaf internet bereikbaar: een pentest bij iedere release.', 'w4'],
+    ], m);
+  }],
+
+  ['final1', 'Oefenronde 1', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-stellingen', prompt: ['Klopt het, of klopt het niet?'],
+    build: grid([
+      { parts: ['Op mobiele apparatuur staat bedrijfsinformatie standaard op het apparaat zelf.'], ans: ['n'], why: 'Standaard juist niet: het apparaat is zo ingericht dat er geen bedrijfsinformatie op wordt opgeslagen.' },
+      { parts: ['Speciale bevoegdheden worden minimaal ieder kwartaal beoordeeld.'], ans: ['k'], why: 'In opzet, bestaan en werking.' },
+      { parts: ['Een externe leverancier krijgt netwerktoegang zonder risicoafweging vooraf.'], ans: ['n'], why: 'Vooraf wordt een risicoafweging gemaakt, die de voorwaarden en de duur bepaalt.' },
+      { parts: ['De antimalware-software beoordeelt altijd alle downloads.'], ans: ['k'], why: 'En het downloaden zelf is beheerst en beperkt.' },
+      { parts: ['Met een bevinding met hoog risico mag een systeem altijd in productie.'], ans: ['n'], why: 'Niet als de bevinding niet op een andere manier gemitigeerd kan worden.' },
+    ], KN, { multi: false, text: true }),
+  }], done, 'Oefenronde 1 van 2') }],
+
+  ['final2', 'Oefenronde 2', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-mobiel', prompt: ['Wat is bij de inzet van mobiele apparatuur minimaal geregeld?'],
+    build: choice([['Patchmanagement en hardening, beheer van apparaten of apps, en een gebruikersovereenkomst.'], ['Alleen een wachtwoord op het apparaat.'], ['Een verbod op mobiel werken.']], 0,
+      'En periodiek wordt getoetst of die drie punten worden nageleefd.',
+      [null, 'Dat is niet genoeg. Het gaat om patchmanagement en hardening, beheer van apparaten of apps, en een gebruikersovereenkomst.',
+        'Mobiel werken mag. Geregeld zijn: patchmanagement en hardening, beheer van apparaten of apps, en een gebruikersovereenkomst.']),
+  }, {
+    id: 'p-scan', prompt: ['Waarop wordt de malwarescan uitgevoerd?'],
+    build: choice([['Alleen op de mailserver.'], ['Op alle omgevingen, alle gedownloade content en alle ontvangen bestanden.'], ['Alleen op bestanden van onbekende afzenders.']], 1,
+      'Gedownloade content vóór executie of opslag; ontvangen bestanden vóór gebruik of opslag in de eigen omgeving.',
+      ['De mailserver is een voorbeeld. De scan geldt voor alle omgevingen, alle gedownloade content en alle ontvangen bestanden.', null,
+        'Niet alleen die: de scan geldt voor alle omgevingen, alle gedownloade content en alle ontvangen bestanden.']),
+  }, {
+    id: 'p-belang', prompt: ['Wie kan informatie met specifiek belang inzien en verwerken?'],
+    build: choice([['Iedereen binnen de organisatie.'], ['Alleen het management.'], ['Gebruikers die de informatie nodig hebben voor hun taak.']], 2,
+      'En de informatie zelf is fysiek en/of logisch geïsoleerd.',
+      ['Niet iedereen: alleen gebruikers die de informatie nodig hebben voor de uitoefening van hun taak.',
+        'Het gaat niet om de functie, maar om de taak: alleen gebruikers die de informatie daarvoor nodig hebben.', null]),
+  }], done, 'Oefenronde 2 van 2 · vraag') }],
+
+  ['finish', 'Afgerond', () => { panel(0); }, { ask: finishCard }],
+].map(([id, title, run, extra]) => ({ id, title, run, ...extra }));
+
+boot();
+</script>
+</body>
+</html>

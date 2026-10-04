@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Back-up, logging en monitoring · BIO2 in beeld</title>
+<link rel="stylesheet" href="../lib/engine.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2314171a'/%3E%3Cpath d='M15 52V38M27 52V20M39 52V32M51 52V14' stroke='%238d959d' stroke-width='7'/%3E%3Cpath d='M7 28H57' stroke='%23c9a45c' stroke-width='4'/%3E%3C/svg%3E">
+<link rel="expect" href="#bar" blocking="render"><!-- hold the first frame until the player exists, so the page transition can run -->
+</head>
+<body>
+<script src="../lib/engine.js"></script>
+<script src="audio/nl/timings.js"></script>
+<script>
+'use strict';
+// Hoofdstuk 14: de overheidsmaatregelen 8.13.01 tot en met 8.19.01 van de BIO2 (pagina 26 en 27): de back-up, de
+// logregel en de logbestanden, monitoren, systeemhulpmiddelen en het installeren van software.
+// Beat ids match content/bio2/ch14/narration.nl.json. One idea per beat.
+const CHAPTER = { number: 14, title: 'Back-up, logging en monitoring', minutes: 7, language: 'nl', next: '../ch15/' };
+
+/* ---------- chapter data (used by the helpers and inside BEATS, so defined first) ---------- */
+const C14_TABS = ['8.13', '8.14', '8.15', '8.16', '8.17', '8.18', '8.19'];
+// Seven controls of ISO 27002 (topics shortened, in our own words) with their government measures in the BIO2.
+const C14_CTRL = [
+  { code: '8.13', topic: ['back-up van', 'informatie'], nrs: ['8.13.01', '8.13.02', '8.13.03', '8.13.04'] },
+  { code: '8.14', topic: ['redundantie van', 'faciliteiten'], nrs: [] },
+  { code: '8.15', topic: ['logging'], nrs: ['8.15.01', '8.15.02', '8.15.03', '8.15.04', '8.15.05', '8.15.06'] },
+  { code: '8.16', topic: ['activiteiten', 'monitoren'], nrs: ['8.16.01', '8.16.02', '8.16.03', '8.16.04'] },
+  { code: '8.17', topic: ['kloksynchronisatie'], nrs: [] },
+  { code: '8.18', topic: ['speciale', 'systeemhulpmiddelen'], nrs: ['8.18.01', '8.18.02'] },
+  { code: '8.19', topic: ['software installeren', 'op systemen'], nrs: ['8.19.01'] },
+];
+// The six things a log line contains at least (8.15.01): [name, the detail from the BIO2, in short for feedback].
+const C14_FIELD = [
+  ['actie', ['de gebeurtenis of handeling', 'die heeft plaatsgevonden'], 'wat er gebeurde'],
+  ['object', ['waarop die effect had: bijvoorbeeld', 'welk bestand, proces of systeem'], 'waarop het effect had'],
+  ['resultaat', ['het resultaat van de', 'gebeurtenis of handeling'], 'hoe het afliep'],
+  ['oorsprong', ['het apparaat of de netwerklocatie', 'van waaruit het in gang is gezet'], 'waar het vandaan kwam'],
+  ['actor', ['de persoon of het proces', 'dat het in gang heeft gezet'], 'wie of wat het in gang zette'],
+  ['tijdstempel', ['datum en tijdstip', 'waarop het plaatsvond'], 'wanneer het gebeurde'],
+];
+const c14_fieldBox = k => [120 + (k % 3) * 456, 262 + Math.floor(k / 3) * 166, 440, 150];
+// Four controls as cards for the second quick check: [number, icon, label].
+const C14_Q2 = [['8.13', 'db', ['back-up']], ['8.15', 'proc', ['logging']], ['8.16', 'loep', ['monitoren']], ['8.18', 'code', ['systeem-', 'hulpmiddelen']]];
+
+/* ---------- chapter drawing helpers (prefixed c14_; the shared b_ helpers live in ../lib/engine.js) ---------- */
+// The six places of a log line, as empty frames with a number; returns [{ g, frame, num }]. c14_field fills one in.
+const c14_fields = (p, t0) => C14_FIELD.map((f, k) => {
+  const [x, y, w, h] = c14_fieldBox(k), g = G(p, { o: 0 });
+  const frame = b_rect(g, x, y, w, h, { fill: COL.panel });
+  const num = T(g, String(k + 1), { x: x + 24, y: y + 44, size: 24, fill: COL.dim, weight: 700, font: MONO });
+  show(g, t0 + k * .1);
+  return { g, frame, num };
+});
+const c14_field = (slot, k, t0) => {
+  const [x, y] = c14_fieldBox(k), [name, lines] = C14_FIELD[k], g = G(slot.g, { o: 0, x: 12 });
+  T(g, name, { x: x + 60, y: y + 44, size: 27, weight: 600, fill: COL.task });
+  lines.forEach((str, n) => T(g, str, { x: x + 24, y: y + 86 + n * 26, size: 19, fill: COL.dim }));
+  tw(g, { o: 1, x: 0 }, t0, .5, out);
+  tw(slot.frame, { c_stroke: COL.task }, t0, .4); tw(slot.num, { c_fill: COL.task }, t0, .4);
+};
+// A log file as a sheet with five grey rows; returns { g, rows }. Hidden; b_rise shows it.
+const c14_log = (p, x, y, w, title) => {
+  const g = b_sheet(p, x, y, w, 290, title);
+  const rows = [0, 1, 2, 3, 4].map(k => mk('rect', { x: x + 28, y: y + 66 + k * 40, width: w - 56, height: 26, rx: 4, fill: COL.edge }, g));
+  return { g, rows };
+};
+
+/* ---------- beats: [id, title, run(m, D), { ask, hold }?] ---------- */
+const BEATS = [
+  ['intro', 'Back-up en logging', (m, D) =>
+    b_title(m, D, 'DEEL C · MENS, GEBOUW EN TECHNIEK · HOOFDSTUK 14', 'Back-up en logging', 'Back-ups, logbestanden, monitoren en systeemhulpmiddelen.')],
+
+  ['zeven', '8.13 tot en met 8.19', (m) => {
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 8.13 TOT EN MET 8.19');
+    // The strip of this chapter: the seven controls. The two without a government measure are dashed.
+    b_tabs(C14_TABS, .4);
+    [1, 4].forEach(b_tabNone);
+    const tV = m('vijf'), tT = m('twee');
+    let withNr = 0, without = 0;
+    C14_CTRL.forEach((c, i) => b_ctrl(p, c, 120 + (i % 4) * 346, 190 + Math.floor(i / 4) * 184, i,
+      c.nrs.length ? tV + .2 + withNr++ * .25 : tT + .2 + without++ * .15));
+    const sum = G(p, { o: 0 });
+    T(sum, 'samen zeventien', { x: 1323, y: 452, size: 25, weight: 600, fill: COL.task, anchor: 'middle' });
+    T(sum, 'overheidsmaatregelen', { x: 1323, y: 484, size: 25, weight: 600, fill: COL.task, anchor: 'middle' });
+    show(sum, tV + 1.8);
+    b_source(p, 580);
+  }],
+
+  ['beleid', 'Back-upbeleid', (m) => {
+    const p = panel(0);
+    b_head(p, '8.13.01 · BACK-UP');
+    b_tab(0, .2);
+    b_kop(p, '8.13.01', 'een back-upbeleid');
+    const tB = m('beleid'), tE = m('eisen'), tR = m('rans'), tI = m('integ');
+    show(b_party(p, 1300, 400, 'db', 'de back-up', { s: 1.9, lab: 92 }), .3);
+    // The policy: requirements for keeping and protecting, defined and adopted.
+    b_rise(b_sheet(p, 120, 262, 500, 330, 'BACK-UPBELEID'), tB);
+    show(b_box(p, 148, 330, 444, ['eisen voor het bewaren'], { hgt: 60, size: 22 }), tE);
+    show(b_box(p, 148, 402, 444, ['eisen voor het beschermen'], { hgt: 60, size: 22 }), tE + 1.2);
+    const stamp = b_stamp(p, 370, 660, 'VASTGESTELD');
+    show(stamp, tE + 2.6, .3); tw(stamp, { x: 470, y: 540 }, tE + 3, .9, io);
+    // Special attention: ransomware, and the integrity of the back-up.
+    show(b_box(p, 720, 366, 290, ['ransomware-aanval'], { col: COL.bad, fill: COL.bad, hgt: 68, size: 21 }), tR);
+    b_arrow(p, 1022, 1090, 400, tR + .4, { stroke: COL.bad });
+    show(b_icon(p, 'schild', { x: 1150, y: 400, s: 1.5, o: 0, stroke: COL.task }), tR + .8);
+    b_txt(p, 'beschermd tegen ransomware-aanvallen', 1100, 290, tR + .8, { size: 21, weight: 600, fill: COL.task });
+    show(b_box(p, 820, 560, 560, ['de integriteit van de back-up behouden'], { col: COL.task, fill: COL.task, hgt: 64, size: 22 }), tI);
+  }],
+
+  ['verlies', 'Verlies en hersteltijd', (m) => {
+    const p = panel(0);
+    b_head(p, '8.13.02 · BACK-UP');
+    b_kop(p, '8.13.02', 'dataverlies en hersteltijd');
+    const tA = m('afw'), tV = m('verlies'), tT = m('tijd');
+    // A time line, schematic: the last back-up, the incident, and the moment everything works again.
+    show(put(path(p, 'M200 470H1400', { stroke: COL.edge, 'stroke-width': 3 }), { o: 0 }), .3);
+    show(put(mk('circle', { cx: 440, cy: 470, r: 11, fill: COL.task }, p), { o: 0 }), .5);
+    b_txt(p, 'laatste back-up', 440, 520, .5, { size: 20, fill: COL.dim });
+    show(b_box(p, 720, 436, 160, ['incident'], { col: COL.bad, fill: COL.bad, hgt: 68, size: 22 }), .8);
+    show(put(mk('circle', { cx: 1200, cy: 470, r: 11, fill: COL.good }, p), { o: 0 }), 1.1);
+    b_txt(p, 'hersteld', 1200, 520, 1.1, { size: 20, fill: COL.dim });
+    b_txt(p, 'SCHEMATISCH', 1400, 560, 1.2, { size: 15, fill: COL.faint, anchor: 'end', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    show(b_box(p, 200, 270, 560, ['bepaald met een expliciete risicoafweging'], { hgt: 64, size: 22 }), tA);
+    show(put(b_matrix(p, 800, 302, .7), { o: 0 }), tA);
+    // Two limits: how much data may be lost, and how long recovery may take.
+    draw(path(p, 'M452 420V396H712V420', { stroke: COL.task, 'stroke-width': 3 }, { d: 0 }), tV, .6);
+    b_txt(p, 'maximaal toegestaan dataverlies', 582, 630, tV, { size: 22, weight: 600, fill: COL.task });
+    show(b_dart(p, 582, 606, 582, 404, { stroke: COL.task }), tV + .3);
+    draw(path(p, 'M888 420V396H1188V420', { stroke: COL.task, 'stroke-width': 3 }, { d: 0 }), tT, .6);
+    b_txt(p, 'maximale hersteltijd', 1038, 630, tT, { size: 22, weight: 600, fill: COL.task });
+    show(b_dart(p, 1038, 606, 1038, 404, { stroke: COL.task }), tT + .3);
+  }],
+
+  ['locatie', 'Een andere locatie', (m) => {
+    const p = panel(0);
+    b_head(p, '8.13.03 · BACK-UP');
+    b_kop(p, '8.13.03', 'opslag op een andere locatie');
+    const tL = m('loc'), tN = m('niet');
+    // Two locations, schematic: the systems on one, the back-up on the other.
+    [['LOCATIE A', 160, 'server', 'systemen'], ['LOCATIE B', 940, 'db', 'de back-up']].forEach(([name, x, icon, label], k) => {
+      const g = G(p, { o: 0 });
+      b_rect(g, x, 280, 500, 300, { fill: COL.panel });
+      b_caps(g, name, x + 28, 320);
+      b_icon(g, icon, { x: x + 250, y: 420, s: 1.6 });
+      T(g, label, { x: x + 250, y: 516, size: 23, weight: 600, anchor: 'middle' });
+      show(g, k ? tL : .3);
+    });
+    b_arrow(p, 672, 926, 430, tL + .4, { stroke: COL.task });
+    b_txt(p, 'back-upproces', 800, 410, tL + .4, { size: 21, weight: 600, fill: COL.task });
+    // An incident on one location does no damage on the other.
+    show(b_box(p, 190, 344, 160, ['incident'], { col: COL.bad, fill: COL.bad, hgt: 56, size: 21 }), tN);
+    show(put(b_tick(p, 1310, 316), { o: 0 }), tN + 2.4);
+    b_txt(p, 'geen schade', 1294, 324, tN + 2.4, { size: 21, weight: 600, fill: COL.good, anchor: 'end' });
+    b_txt(p, 'een incident op de ene locatie leidt niet tot schade op de andere', 800, 650, tN + 1, { size: 23, weight: 600, fill: COL.task });
+  }],
+
+  ['hersteltest', 'Herstel testen', (m) => {
+    const p = panel(0);
+    b_head(p, '8.13.04 · BACK-UP');
+    b_kop(p, '8.13.04', 'de herstelprocedure testen');
+    const tT = m('test'), tW = m('wijz'), tN = m('nood');
+    b_rise(b_sheet(p, 540, 290, 420, 220, 'HERSTELPROCEDURE', 3), .3);
+    // Tested at least every year, or after a major change.
+    b_yearly(p, 280, 400, 84, tT);
+    b_txt(p, 'minimaal jaarlijks', 280, 530, tT + .4, { size: 22, weight: 600, fill: COL.task });
+    b_arrow(p, 380, 526, 400, tT + .6, { stroke: COL.task });
+    b_txt(p, 'getest', 453, 380, tT + .6, { size: 21, weight: 600, fill: COL.task });
+    show(b_box(p, 1060, 366, 380, ['of na een grote wijziging'], { hgt: 68, size: 22 }), tW);
+    b_arrow(p, 1046, 974, 400, tW + .4, { stroke: COL.task });
+    show(b_box(p, 440, 590, 620, ['zodat ze werkt als het in een noodgeval moet'], { col: COL.task, fill: COL.task, hgt: 66, size: 22 }), tN);
+  }],
+
+  ['logregel', 'De logregel', (m) => {
+    const p = panel(0);
+    S.hd = b_head(p, '8.15.01 · LOGGING');
+    b_tab(2, .2);
+    S.kop = b_kop(p, '8.15.01', 'wat een logregel minimaal bevat');
+    // Six places; the first three fill in.
+    S.slots = c14_fields(p, m('regel'));
+    [0, 1, 2].forEach(k => c14_field(S.slots[k], k, m('f' + (k + 1))));
+  }],
+
+  ['logregel2', 'De logregel, vervolg', (m) => {
+    [3, 4, 5].forEach(k => c14_field(S.slots[k], k, m('f' + (k + 1))));
+  }],
+
+  ['nooit', 'Wat er nooit in staat', (m) => {
+    // Same picture: what a log line never contains.
+    const p = S.panel, tN = m('nooit');
+    hide(S.kop, 0, .3); hide(S.hd, 0, .3);
+    b_head(p, '8.15.02 · LOGGING', .3);
+    b_kop(p, '8.15.02', 'wat er nooit in staat', .3);
+    show(b_box(p, 120, 620, 1352, ['nooit in een logregel: gegevens die tot het doorbreken van de beveiliging kunnen leiden'], { col: COL.bad, fill: COL.bad, hgt: 70, size: 23 }), tN);
+  }],
+
+  ['overzicht', 'Overzicht', (m) => {
+    const p = panel(0);
+    b_head(p, '8.15.03 · LOGGING');
+    b_kop(p, '8.15.03', 'een overzicht van logbestanden');
+    const tO = m('ov'), ys = [330, 450, 570];
+    // Systems, schematic, each producing a log file; and the overview that lists those files.
+    ys.forEach((y, k) => {
+      const g = G(p, { o: 0 });
+      b_icon(g, 'server', { x: 200, y, s: 1 });
+      path(g, `M250 ${y}H360`, { stroke: COL.dim, 'stroke-width': 3 });
+      b_icon(g, 'doc', { x: 410, y, s: 1.1, stroke: COL.task });
+      T(g, 'logbestand ' + 'ABC'[k], { x: 456, y: y + 8, size: 21 });
+      show(g, .3 + k * .2);
+    });
+    const list = b_sheet(p, 860, 262, 560, 380, 'OVERZICHT LOGBESTANDEN');
+    b_caps(list, 'SCHEMATISCH', 1392, 624, { fill: COL.faint, anchor: 'end' });
+    ys.forEach((y, k) => {
+      b_rect(list, 888, 330 + k * 76, 504, 58, { fill: COL.board, rx: 6 });
+      T(list, 'logbestand ' + 'ABC'[k], { x: 912, y: 367 + k * 76, size: 21 });
+    });
+    b_rise(list, tO);
+    b_arrow(p, 640, 846, 450, tO + .3, { stroke: COL.task });
+  }],
+
+  ['bewaartermijn', 'Bewaartermijn', (m) => {
+    const p = panel(0);
+    b_head(p, '8.15.04 · LOGGING');
+    b_kop(p, '8.15.04', 'bewaartermijn risicogericht bepalen');
+    const tR = m('risico'), tL = m('lang');
+    // What is kept: log files, and the data in the system that watches security events.
+    b_rise(b_tile(p, { x: 120, y: 262, w: 420, h: 120, lines: ['logbestanden'], size: 24 }), .3);
+    const siem = G(p, { o: 0, y: 14 });
+    b_rect(siem, 120, 400, 420, 170, { fill: COL.panel });
+    T(siem, 'gegevens in het', { x: 148, y: 446, size: 22, weight: 600 });
+    T(siem, 'SIEM', { x: 318, y: 447, size: 24, weight: 700, font: MONO });
+    b_term(siem, 'Security Incident and Event Monitoring', 'siem', { x: 148, y: 498, size: 17, o: 1 });
+    T(siem, 'bewaakt beveiligingsgebeurtenissen', { x: 148, y: 536, size: 17, fill: COL.dim });
+    b_rise(siem, .5);
+    b_arrow(p, 552, 626, 335, tR);
+    show(b_box(p, 640, 300, 600, ['bewaartermijn: risicogericht bepaald'], { col: COL.task, fill: COL.task, hgt: 70, size: 23 }), tR);
+    show(put(b_matrix(p, 1290, 335, .7), { o: 0 }), tR);
+    // The scenario that counts: attackers who stay inside for a long time. The log is kept at least as long.
+    const line = G(p, { o: 0 });
+    b_caps(line, 'SCHEMATISCH', 1440, 430, { fill: COL.faint, anchor: 'end' });
+    path(line, 'M640 500H1440', { stroke: COL.edge, 'stroke-width': 3 });
+    show(line, tL - .3);
+    draw(path(p, 'M720 470H1300', { stroke: COL.bad, 'stroke-width': 9 }, { d: 0 }), tL, 1.6);
+    b_txt(p, 'aanvallers langdurig binnen', 720, 452, tL, { size: 20, weight: 600, fill: COL.bad, anchor: 'start' });
+    draw(path(p, 'M640 530H1400', { stroke: COL.task, 'stroke-width': 9 }, { d: 0 }), tL + 1.6, 1.6);
+    b_txt(p, 'bewaartermijn', 640, 568, tL + 1.6, { size: 20, weight: 600, fill: COL.task, anchor: 'start' });
+  }, { hold: true }],   // the lesson waits here: the English term can be heard before it goes on
+
+  ['q1', 'Controlevraag', () => {
+    // The six parts of a log line as cards to point at; the question draws them again.
+    const p = panel(0);
+    b_head(p, '8.15.01 · LOGGING');
+    b_tab(-1, .2);
+    b_txt(p, 'een logregel bevat minimaal', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.slots = c14_fields(p, .3);
+    S.slots.forEach((slot, k) => c14_field(slot, k, .5 + k * .1));
+  }, { ask: done => {
+    const items = S.slots.map((slot, k) => ({ el: slot.g, box: c14_fieldBox(k), label: C14_FIELD[k][0] }));
+    const not = (right, what) => i => `Dat deel zegt ${C14_FIELD[i][2]}. ${what} staat bij ${right}.`;
+    quiz(WIDE, [{
+      id: 'c-logregel-1', prompt: ['In welk deel staat wie of wat de gebeurtenis in gang heeft gezet?'],
+      build: pickEls(items, 4, 'De actor: de persoon die of het proces dat de gebeurtenis in gang heeft gezet.', not('de actor', 'Wie of wat het in gang zette')),
+    }, {
+      id: 'c-logregel-2', prompt: ['In welk deel staat vanaf welk apparaat of welke netwerklocatie het kwam?'],
+      build: pickEls(items, 3, 'De oorsprong: het apparaat of de netwerklocatie van waaruit het in gang is gezet.', not('de oorsprong', 'Waar het vandaan kwam')),
+    }, {
+      id: 'c-logregel-3', prompt: ['In welk deel staat waarop de handeling effect had, bijvoorbeeld welk bestand?'],
+      build: pickEls(items, 1, 'Het object: waarop de gebeurtenis of handeling effect had.', not('het object', 'Waarop het effect had')),
+    }], done);
+  } }],
+
+  ['wijzigen', 'Wijzigen melden', (m) => {
+    const p = panel(0);
+    b_head(p, '8.15.05 · LOGGING');
+    b_tab(2, .2);
+    b_kop(p, '8.15.05', 'wijzigen of verwijderen melden');
+    const tW = m('wijz'), tM = m('meld'), tP = m('proc');
+    const log = c14_log(p, 120, 270, 400, 'LOGGEGEVENS');
+    b_rise(log.g, .3);
+    // One row is changed, one is removed: neither should happen.
+    tw(log.rows[1], { c_fill: COL.bad }, tW, .5);
+    draw(path(p, 'M140 469H500', { stroke: COL.bad, 'stroke-width': 4 }, { d: 0 }), tW + 1.2, .5);
+    b_txt(p, 'oneigenlijk wijzigen of verwijderen,', 120, 600, tW, { size: 20, fill: COL.bad, anchor: 'start', weight: 600 });
+    b_txt(p, 'of een poging daartoe', 120, 628, tW + 2.6, { size: 20, fill: COL.bad, anchor: 'start', weight: 600 });
+    b_arrow(p, 532, 606, 410, tM);
+    show(b_box(p, 620, 376, 420, ['informatiebeveiligingsincident'], { col: COL.bad, fill: COL.bad, hgt: 68, size: 22 }), tM);
+    b_txt(p, 'zo snel mogelijk gemeld', 830, 350, tM, { size: 21, weight: 600, fill: COL.task });
+    b_arrow(p, 1052, 1106, 410, tP);
+    const proc = b_sheet(p, 1120, 300, 360, 220, 'PROCEDURE INCIDENTEN');
+    put(b_chip(proc, 1148, 366, 110, '5.24', { col: COL.iso, fill: COL.iso, hgt: 44, size: 20 }), { o: 1 });
+    b_caps(proc, 'HOOFDSTUK 10', 1148, 460);
+    b_rise(proc, tP);
+  }],
+
+  ['toetsing', 'Toetsen', (m) => {
+    const p = panel(0);
+    b_head(p, '8.15.06 · LOGGING');
+    b_kop(p, '8.15.06', 'toetsen dat logbestanden ongewijzigd zijn');
+    const tT = m('toets'), tO = m('onafh');
+    const log = c14_log(p, 120, 270, 400, 'LOGBESTANDEN');
+    b_rise(log.g, .3);
+    show(put(b_tick(p, 478, 306), { o: 0 }), 1.2);
+    b_txt(p, 'ongewijzigd?', 320, 600, 1.2, { size: 22, weight: 600 });
+    // Checked periodically during the retention period; how often follows from an explicit weighing of risks.
+    show(put(b_caps(p, 'GEDURENDE DE BEWAARTERMIJN', 620, 296), { o: 0 }), tT);
+    b_periodic(p, 620, 1240, 330, tT);
+    show(b_box(p, 620, 380, 620, ['periodieke toetsing: bepaald met', 'een expliciete risicoafweging'], { col: COL.task, fill: COL.task, hgt: 96, size: 22 }), tT + 1.6);
+    show(put(b_matrix(p, 1290, 428, .7), { o: 0 }), tT + 1.6);
+    // Done by someone who is independent of the execution.
+    show(b_role(p, 720, 600, 'uitvoering'), tO);
+    show(put(path(p, 'M870 540V690', { stroke: COL.dim, 'stroke-width': 3, 'stroke-dasharray': '8 7' }), { o: 0 }), tO);
+    show(b_role(p, 1040, 600, 'onafhankelijke functionaris', COL.task), tO + .4);
+    b_txt(p, 'voert de toetsing uit', 1220, 608, tO + .9, { size: 21, weight: 600, fill: COL.task, anchor: 'start' });
+  }],
+
+  ['monitoren', 'Monitoren', (m) => {
+    const p = panel(0);
+    b_head(p, '8.16.03 · MONITOREN');
+    b_tab(3, .2);
+    b_kop(p, '8.16.03', 'de omgeving monitoren');
+    const tO = m('omg'), tD = m('det'), tA = m('afw');
+    // The environment that processes information, schematic.
+    const env = G(p, { o: 0 });
+    b_rect(env, 120, 270, 560, 360, { fill: COL.panel });
+    b_caps(env, 'INFORMATIEVERWERKENDE OMGEVING', 148, 310);
+    [['server', 250, 420], ['db', 400, 420], ['laptop', 550, 420], ['proc', 320, 540], ['code', 480, 540]].forEach(([icon, x, y]) => b_icon(env, icon, { x, y, s: 1 }));
+    show(env, .3);
+    b_arrow(p, 692, 806, 345, tO, { stroke: COL.task });
+    show(b_icon(p, 'loep', { x: 750, y: 290, s: .9, o: 0, stroke: COL.task }), tO);
+    show(b_box(p, 820, 310, 620, ['een detectie- en response-oplossing'], { col: COL.task, fill: COL.task, hgt: 70, size: 23 }), tO);
+    show(b_box(p, 820, 430, 620, ['aanvallen detecteren'], { hgt: 64, size: 22 }), tD);
+    show(b_box(p, 820, 510, 620, ['afwijkingen adequaat en tijdig behandelen'], { hgt: 64, size: 22 }), tA);
+  }],
+
+  ['cert', 'Dreigingen delen', (m) => {
+    const p = panel(0);
+    b_head(p, '8.16.01 · MONITOREN');
+    b_kop(p, '8.16.01', 'nieuwe dreigingen delen');
+    const tD = m('deel'), tK = m('kader');
+    show(put(b_caps(p, 'ONTDEKT BIJ HET MONITOREN (8.16.03)', 120, 356), { o: 0 }), .3);
+    show(b_box(p, 120, 370, 420, ['nieuwe dreiging (aanval)'], { col: COL.bad, fill: COL.bad, hgt: 70, size: 23 }), .3);
+    // Shared, as an obligation, with the designated team.
+    b_arrow(p, 552, 846, 405, tD, { stroke: COL.task });
+    b_txt(p, 'verplicht gedeeld', 699, 384, tD, { size: 21, weight: 600, fill: COL.task });
+    const team = G(p, { o: 0, y: 14 });
+    b_rect(team, 860, 290, 600, 230, { fill: COL.panel, stroke: COL.dim });
+    T(team, 'CERT', { x: 888, y: 350, size: 34, weight: 700, font: MONO });
+    b_term(team, 'Computer Emergency Response Team', 'cert', { x: 888, y: 400, size: 21, o: 1 });
+    T(team, 'het daarvoor aangewezen responsteam', { x: 888, y: 446, size: 19, fill: COL.dim });
+    b_rise(team, tD + .3);
+    show(b_dashed(p, 120, 580, 560, ['binnen de geldende juridische kaders'], { hgt: 64, size: 22 }), tK);
+  }, { hold: true }],   // the lesson waits here: the English term can be heard before it goes on
+
+  ['regels', 'Rapporteren', (m) => {
+    const p = panel(0);
+    b_head(p, '8.16.02 · MONITOREN');
+    b_kop(p, '8.16.02', 'wanneer rapporteren aan het management');
+    const tR = m('regels'), tM = m('mgmt');
+    const proc = G(p, { o: 0, y: 14 });
+    b_rect(proc, 120, 300, 380, 200, { fill: COL.panel });
+    T(proc, 'monitoringsproces', { x: 148, y: 366, size: 26, weight: 600 });
+    T(proc, 'SIEM en/of SOC', { x: 148, y: 410, size: 20, fill: COL.dim, font: MONO });
+    b_rise(proc, .3);
+    // Unambiguous rules: when is an incident reported, and to whom.
+    b_arrow(p, 512, 586, 400, tR);
+    b_rise(b_sheet(p, 600, 280, 480, 240, 'EENDUIDIGE REGELS'), tR);
+    show(b_box(p, 628, 350, 424, ['wanneer wordt een', 'incident gerapporteerd?'], { col: COL.task, fill: COL.task, hgt: 100, size: 22 }), tR + .4);
+    b_arrow(p, 1092, 1190, 400, tM, { stroke: COL.task });
+    const boss = b_role(p, 1300, 390, 'verantwoordelijk');
+    T(boss, 'management', { x: 1300, y: 502, size: 23, weight: 600, anchor: 'middle' });
+    show(boss, tM);
+  }],
+
+  ['netwerk', 'Netwerkcomponenten', (m) => {
+    const p = panel(0);
+    b_head(p, '8.16.04 · MONITOREN');
+    b_kop(p, '8.16.04', 'netwerkcomponenten loggen en monitoren');
+    const tL = m('log'), tM = m('mon'), tR = m('reag');
+    const comp = G(p, { o: 0 });
+    [300, 400, 500].forEach(y => b_icon(comp, 'keten', { x: 250, y, s: 1.1 }));
+    T(comp, 'actieve', { x: 250, y: 574, size: 22, weight: 600, anchor: 'middle' });
+    T(comp, 'netwerkcomponenten', { x: 250, y: 602, size: 22, weight: 600, anchor: 'middle' });
+    show(comp, .3);
+    b_arrow(p, 330, 426, 400, tL);
+    const log = c14_log(p, 440, 262, 360, 'LOGGING');
+    b_rise(log.g, tL);
+    // Someone watches that logging, to see what deviates and to act on it.
+    b_arrow(p, 812, 906, 400, tM, { stroke: COL.task });
+    show(b_icon(p, 'loep', { x: 980, y: 392, s: 1.5, o: 0, stroke: COL.task }), tM);
+    b_txt(p, 'monitoring van die logging', 980, 486, tM, { size: 21, weight: 600, fill: COL.task });
+    show(b_box(p, 1130, 320, 340, ['afwijkende gebeurtenissen', 'waarnemen'], { hgt: 90, size: 21 }), tR);
+    show(b_box(p, 1130, 424, 340, ['en erop reageren'], { hgt: 64, size: 21 }), tR + 2.2);
+  }],
+
+  ['hulpmiddelen', 'Systeemhulpmiddelen', (m) => {
+    const p = panel(0);
+    S.hd = b_head(p, '8.18.01 · SYSTEEMHULPMIDDELEN');
+    b_tab(5, .2);
+    S.kop = b_kop(p, '8.18.01', 'toegang tot systeemhulpmiddelen');
+    const tB = m('bev'), tS = m('strikt');
+    b_rise(b_tile(p, { x: 1020, y: 270, w: 420, h: 220, icon: 'code', lines: ['systeemhulpmiddelen'], iconY: 90, iconS: 1.5, size: 23 }), .3);
+    // Only authorised staff, and only at the moments it is strictly necessary.
+    show(b_role(p, 220, 330, 'bevoegd personeel', COL.task), tB);
+    b_arrow(p, 290, 1006, 330, tB + .4, { stroke: COL.task });
+    const other = b_role(p, 220, 560, 'overig personeel');
+    show(other, tB + 1.2);
+    b_arrow(p, 290, 560, 560, tB + 1.4);
+    draw(path(p, 'M576 530V590', { stroke: COL.bad, 'stroke-width': 6 }, { d: 0 }), tB + 1.8, .4);
+    b_txt(p, 'geen toegang', 600, 568, tB + 1.9, { size: 20, weight: 600, fill: COL.bad, anchor: 'start' });
+    show(b_box(p, 430, 296, 440, ['alleen als het strikt noodzakelijk is'], { col: COL.task, fill: COL.task, hgt: 68, size: 21 }), tS);
+  }],
+
+  ['gelogd', 'Gebruik gelogd', (m) => {
+    // Same picture: the use is logged, and that logging can be consulted for half a year.
+    const p = S.panel, tL = m('log'), tH = m('half'), x0 = 1020, x1 = 1440;
+    hide(S.kop, 0, .3); hide(S.hd, 0, .3);
+    b_head(p, '8.18.02 · SYSTEEMHULPMIDDELEN', .3);
+    b_kop(p, '8.18.02', 'het gebruik wordt gelogd', .3);
+    b_down(p, 1230, 500, 548, tL, COL.task);
+    b_rise(b_sheet(p, 1020, 560, 420, 90, 'LOGGING VAN HET GEBRUIK', 1), tL);
+    const line = G(p, { o: 0 });
+    path(line, `M${x0} 716H${x1}`, { stroke: COL.edge, 'stroke-width': 3 });
+    [['nu', x0], ['6 maanden', x1]].forEach(([str, x]) => {
+      path(line, `M${x} 704V728`, { stroke: COL.dim, 'stroke-width': 3 });
+      T(line, str, { x, y: 760, size: 17, fill: COL.dim, anchor: 'middle', font: MONO });
+    });
+    show(line, tH - .2);
+    draw(path(p, `M${x0} 716H${x1}`, { stroke: COL.task, 'stroke-width': 9 }, { d: 0 }), tH, 1.4);
+    b_txt(p, 'een halfjaar beschikbaar voor onderzoek', 1000, 724, tH + .4, { size: 21, weight: 600, fill: COL.task, anchor: 'end' });
+  }],
+
+  ['software', 'Software installeren', (m) => {
+    const p = panel(0);
+    b_head(p, '8.19.01 · SOFTWARE INSTALLEREN');
+    b_tab(6, .2);
+    b_kop(p, '8.19.01', 'niet-geautoriseerde software');
+    const tR = m('risico'), tB = m('beh');
+    show(b_party(p, 200, 420, 'persoon', 'gebruiker', { s: 1.4, lab: 86 }), .3);
+    show(b_party(p, 1380, 420, 'laptop', 'systeem', { s: 1.5, lab: 86 }), .3);
+    b_arrow(p, 270, 386, 420, tR);
+    show(b_box(p, 400, 376, 400, ['installeert niet-', 'geautoriseerde software'], { col: COL.bad, fill: COL.bad, hgt: 90, size: 21 }), tR);
+    b_arrow(p, 812, 886, 420, tB, { stroke: COL.task });
+    const guard = G(p, { o: 0, y: 14 });
+    b_rect(guard, 900, 376, 360, 90, { fill: COL.panel, stroke: COL.task, sw: 3 });
+    b_icon(guard, 'schild', { x: 950, y: 421, s: .9, stroke: COL.task });
+    T(guard, 'dat risico wordt', { x: 996, y: 414, size: 21, weight: 600, fill: COL.task });
+    T(guard, 'beheerst', { x: 996, y: 442, size: 21, weight: 600, fill: COL.task });
+    b_rise(guard, tB);
+  }],
+
+  ['q2', 'Controlevraag', () => {
+    // Four controls of this chapter as cards to point at.
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 8.13 TOT EN MET 8.19');
+    b_tab(-1, .2);
+    b_txt(p, 'vier van de beheersmaatregelen met overheidsmaatregelen', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.cards = b_cards(p, C14_Q2);
+  }, { ask: done => {
+    const items = b_cardItems(S.cards, C14_Q2);
+    const about = ['Dat gaat over de back-up.', 'Dat gaat over logregels en logbestanden.', 'Dat gaat over monitoren en dreigingen delen.', 'Dat gaat over systeemhulpmiddelen.'];
+    quiz(WIDE, [{
+      id: 'c-geldt-1', prompt: ['Na een brand op de hoofdlocatie moet de back-up nog bruikbaar zijn. Welke maatregel geldt?'],
+      build: pickEls(items, 0, '8.13.03: de back-up staat op een locatie waar een incident op de andere locatie geen schade kan aanrichten.',
+        i => about[i] + ' De locatie van de back-up staat in 8.13.03.'),
+    }, {
+      id: 'c-geldt-2', prompt: ['Bij het monitoren wordt een nieuwe aanval ontdekt. Waar staat dat die wordt gedeeld?'],
+      build: pickEls(items, 2, '8.16.01: nieuwe dreigingen worden verplicht gedeeld met het aangewezen CERT, binnen de geldende juridische kaders.',
+        i => about[i] + ' Het delen van nieuwe dreigingen staat in 8.16.01.'),
+    }, {
+      id: 'c-geldt-3', prompt: ['Een beheerder gebruikt een krachtig hulpprogramma. Waar staat dat dit wordt gelogd?'],
+      build: pickEls(items, 3, '8.18.02: het gebruik van systeemhulpmiddelen wordt gelogd; de logging is een halfjaar beschikbaar voor onderzoek.',
+        i => about[i] + ' Het loggen van dat gebruik staat in 8.18.02.'),
+    }], done);
+  } }],
+
+  ['wrap', 'Samenvatting', (m) => {
+    const p = panel(0);
+    b_head(p, 'SAMENVATTING');
+    hide(S.tabsG, 0, .4);
+    b_wrap(p, [
+      ['Een back-upbeleid, en een geteste herstelprocedure.', 'Dataverlies en hersteltijd bepaald; opslag op een andere locatie; minimaal jaarlijks getest.', 'w1'],
+      ['Een logregel bevat minimaal zes gegevens.', 'Actie, object, resultaat, oorsprong, actor en tijdstempel; nooit iets dat de beveiliging breekt.', 'w2'],
+      ['De omgeving wordt gemonitord.', 'Met detectie en respons; nieuwe dreigingen worden gedeeld met het aangewezen CERT.', 'w3'],
+      ['Systeemhulpmiddelen: alleen bevoegd personeel.', 'Alleen als het strikt noodzakelijk is; het gebruik wordt gelogd.', 'w4'],
+    ], m);
+  }],
+
+  ['final1', 'Oefenronde 1', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-stellingen', prompt: ['Klopt het, of klopt het niet?'],
+    build: grid([
+      { parts: ['De herstelprocedure wordt minimaal jaarlijks getest, of na een grote wijziging.'], ans: ['k'], why: 'Zo werkt ze ook als ze in een noodgeval wordt uitgevoerd.' },
+      { parts: ['Een incident bij de systemen mag ook de back-up kunnen raken.'], ans: ['n'], why: 'Een incident op de ene locatie mag niet kunnen leiden tot schade op de andere.' },
+      { parts: ['Een logregel bevat ook het wachtwoord waarmee is ingelogd.'], ans: ['n'], why: 'Een logregel bevat nooit gegevens die tot het doorbreken van de beveiliging kunnen leiden.' },
+      { parts: ['Logbestanden worden getoetst door iemand die onafhankelijk is van de uitvoering.'], ans: ['k'], why: 'Periodiek, gedurende de bewaartermijn.' },
+      { parts: ['Het gebruik van systeemhulpmiddelen hoeft niet te worden gelogd.'], ans: ['n'], why: 'Het wordt gelogd, en de logging is een halfjaar beschikbaar voor onderzoek.' },
+    ], KN, { multi: false, text: true }),
+  }], done, 'Oefenronde 1 van 2') }],
+
+  ['final2', 'Oefenronde 2', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-backup', prompt: ['Wat is voor de back-up met een expliciete risicoafweging bepaald?'],
+    build: choice([['Het maximaal toegestane dataverlies en de maximale hersteltijd.'], ['Alleen hoe vaak er een back-up wordt gemaakt.'], ['Wie de back-up mag terugzetten.']], 0,
+      'Dat zijn de twee grenzen na een incident.',
+      [null, 'Dat noemt de maatregel niet. Bepaald zijn het maximaal toegestane dataverlies en de maximale hersteltijd.',
+        'Dat noemt de maatregel niet. Bepaald zijn het maximaal toegestane dataverlies en de maximale hersteltijd.']),
+  }, {
+    id: 'p-wijzigen', prompt: ['Wat gebeurt er bij oneigenlijk wijzigen of verwijderen van loggegevens?'],
+    build: choice([['Niets, als het bij een poging blijft.'], ['Het wordt zo snel mogelijk gemeld als informatiebeveiligingsincident.'], ['Het wordt eens per jaar gerapporteerd.']], 1,
+      'Via de procedure voor informatiebeveiligingsincidenten.',
+      ['Ook een poging telt: die wordt zo snel mogelijk gemeld als informatiebeveiligingsincident.', null,
+        'Niet eens per jaar: het wordt zo snel mogelijk gemeld als informatiebeveiligingsincident.']),
+  }, {
+    id: 'p-hulpmiddelen', prompt: ['Wie heeft toegang tot systeemhulpmiddelen?'],
+    build: choice([['Alle medewerkers.'], ['Iedere beheerder, altijd.'], ['Alleen bevoegd personeel, op momenten dat het strikt noodzakelijk is.']], 2,
+      'En het gebruik wordt gelogd.',
+      ['Niet iedereen: alleen bevoegd personeel, op momenten dat toegang strikt noodzakelijk is.',
+        'Niet altijd: alleen bevoegd personeel, en alleen op momenten dat toegang strikt noodzakelijk is.', null]),
+  }], done, 'Oefenronde 2 van 2 · vraag') }],
+
+  ['finish', 'Afgerond', () => { panel(0); }, { ask: finishCard }],
+].map(([id, title, run, extra]) => ({ id, title, run, ...extra }));
+
+boot();
+</script>
+</body>
+</html>

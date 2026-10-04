@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Netwerk, cryptografie en veilig veranderen · BIO2 in beeld</title>
+<link rel="stylesheet" href="../lib/engine.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2314171a'/%3E%3Cpath d='M15 52V38M27 52V20M39 52V32M51 52V14' stroke='%238d959d' stroke-width='7'/%3E%3Cpath d='M7 28H57' stroke='%23c9a45c' stroke-width='4'/%3E%3C/svg%3E">
+<link rel="expect" href="#bar" blocking="render"><!-- hold the first frame until the player exists, so the page transition can run -->
+</head>
+<body>
+<script src="../lib/engine.js"></script>
+<script src="audio/nl/timings.js"></script>
+<script>
+'use strict';
+// Hoofdstuk 15, het laatste: de overheidsmaatregelen 8.20.01 tot en met 8.32.02 van de BIO2 (pagina 27 tot en met 29):
+// netwerkcomponenten, netwerkdiensten en versleuteling, cryptografie; en daarna veilig ontwerpen, testen, uitbesteden
+// en wijzigen. Two halves, each with its own overview and its own strip (as in chapter 12).
+// Beat ids match content/bio2/ch15/narration.nl.json. One idea per beat.
+const CHAPTER = { number: 15, title: 'Netwerk, cryptografie en veilig veranderen', minutes: 8, language: 'nl' };   // the last chapter: no next
+
+/* ---------- chapter data (used by the helpers and inside BEATS, so defined first) ---------- */
+// The strips: a run of controls without a government measure is one dashed step.
+const C15_TABS1 = ['8.20', '8.21', '8.22', '8.23', '8.24'];
+const C15_TABS2 = ['8.25–8.26', '8.27', '8.28', '8.29', '8.30', '8.31', '8.32', '8.33–8.34'];
+// The controls of ISO 27002 (topics shortened, in our own words) with their government measures in the BIO2.
+const C15_NET = [
+  { code: '8.20', topic: ['beveiliging', 'netwerkcomponenten'], nrs: ['8.20.01', '8.20.02'] },
+  { code: '8.21', topic: ['beveiliging van', 'netwerkdiensten'], nrs: ['8.21.01', '8.21.02', '8.21.03', '8.21.04'] },
+  { code: '8.22', topic: ['netwerksegmentatie'], nrs: ['8.22.01'] },
+  { code: '8.23', topic: ['webfilters'], nrs: [] },
+  { code: '8.24', topic: ['gebruik van', 'cryptografie'], nrs: ['8.24.01', '8.24.02', '8.24.04', '8.24.05'] },
+];
+const C15_DEV = [
+  { code: '8.25', topic: ['beveiligen tijdens', 'de ontwikkelcyclus'], nrs: [] },
+  { code: '8.26', topic: ['beveiligingseisen', 'voor toepassingen'], nrs: [] },
+  { code: '8.27', topic: ['veilige architectuur', 'en uitgangspunten'], nrs: ['8.27.01'] },
+  { code: '8.28', topic: ['veilig coderen'], nrs: [] },
+  { code: '8.29', topic: ['testen bij ontwikkeling', 'en acceptatie'], nrs: ['8.29.01'] },
+  { code: '8.30', topic: ['uitbestede', 'systeemontwikkeling'], nrs: ['8.30.01'] },
+  { code: '8.31', topic: ['ontwikkel, test en', 'productie gescheiden'], nrs: ['8.31.01', '8.31.02'] },
+  { code: '8.32', topic: ['wijzigingsbeheer'], nrs: ['8.32.01', '8.32.02'] },
+  { code: '8.33', topic: ['testgegevens'], nrs: [] },
+  { code: '8.34', topic: ['systemen beschermen', 'tijdens audits'], nrs: [] },
+];
+// The seven topics the cryptography policy works out at least (8.24.01).
+const C15_BELEID = [
+  ['wanneer cryptografie wordt ingezet'],
+  ['wie verantwoordelijk is voor de implementatie'],
+  ['wie verantwoordelijk is voor het sleutelbeheer'],
+  ['hoe wordt geregistreerd waar welke', 'cryptografie wordt toegepast'],
+  ['welke normen als basis dienen, en hoe de normen', 'van het Forum Standaardisatie worden toegepast'],
+  ['hoe het beschermingsniveau wordt vastgesteld'],
+  ['bij communicatie tussen entiteiten wordt', 'het beleid onderling vastgesteld'],
+];
+// Cards for the two quick checks: [number, icon, label].
+const C15_Q1 = [['8.20', 'keten', ['netwerk-', 'componenten']], ['8.21', 'slot', ['netwerkdiensten']], ['8.22', 'schild', ['gescheiden', 'groepen']]];
+const c15_q1X = i => 314 + i * 336;
+const C15_Q2 = [['8.24', 'sleutel', ['cryptografie']], ['8.29', 'loep', ['acceptatietesten']], ['8.31', 'server', ['testen en', 'productie']], ['8.32', 'proc', ['wijzigingsbeheer']]];
+
+/* ---------- chapter drawing helpers (prefixed c15_; the shared b_ helpers live in ../lib/engine.js) ---------- */
+// Topic k of the cryptography policy: a numbered row, four on the left and three on the right. Shown at t0.
+const c15_topic = (p, k, t0) => {
+  const [x, y] = k < 4 ? [128, 318 + k * 100] : [808, 318 + (k - 4) * 124], g = G(p, { o: 0, x: 12 });
+  b_num(g, k + 1, x, y);
+  C15_BELEID[k].forEach((str, n) => T(g, str, { x: x + 68, y: y + 32 + n * 28, size: 22, weight: n ? 500 : 600 }));
+  tw(g, { o: 1, x: 0 }, t0, .5, out);
+};
+// The three environments in a row: development, test and production (the one that counts, in amber). Shown at t0.
+const c15_envs = (p, t0) => [['ONTWIKKELOMGEVING', 'code'], ['TESTOMGEVING', 'loep'], ['PRODUCTIEOMGEVING', 'server']].forEach(([name, icon], k) => {
+  const x = 120 + k * 460, g = G(p, { o: 0 });
+  b_rect(g, x, 270, 420, 200, { fill: COL.panel, stroke: k === 2 ? COL.task : COL.edge, sw: k === 2 ? 3 : 2 });
+  b_caps(g, name, x + 28, 310, { fill: k === 2 ? COL.task : COL.dim });
+  b_icon(g, icon, { x: x + 210, y: 366, s: 1.2 });
+  show(g, t0 + k * .15);
+  if (k < 2) b_arrow(p, x + 428, x + 452, 370, t0 + .4);
+});
+
+/* ---------- beats: [id, title, run(m, D), { ask, hold }?] ---------- */
+const BEATS = [
+  ['intro', 'Netwerk en cryptografie', (m, D) =>
+    b_title(m, D, 'DEEL C · MENS, GEBOUW EN TECHNIEK · HOOFDSTUK 15', 'Netwerk en cryptografie', 'En veilig veranderen: ontwerpen, testen, uitbesteden en wijzigen.')],
+
+  ['vijftien', '8.20 tot en met 8.24', (m) => {
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 8.20 TOT EN MET 8.34');
+    b_txt(p, 'vijftien beheersmaatregelen, in twee delen', 800, 222, .4, { size: 25, fill: COL.dim });
+    const tV = m('vijf'), tO = m('vier');
+    // The strip of the first half: networks and cryptography. Web filters have no government measure.
+    b_tabs(C15_TABS1, tV);
+    b_tabNone(3);
+    let withNr = 0;
+    C15_NET.forEach((c, i) => b_ctrl(p, c, 120 + (i % 3) * 346, 262 + Math.floor(i / 3) * 184, i, c.nrs.length ? tO + .2 + withNr++ * .25 : tO + 1.4));
+    const sum = G(p, { o: 0 });
+    T(sum, 'samen elf', { x: 977, y: 522, size: 25, weight: 600, fill: COL.task, anchor: 'middle' });
+    T(sum, 'overheidsmaatregelen', { x: 977, y: 554, size: 25, weight: 600, fill: COL.task, anchor: 'middle' });
+    show(sum, tO + 1.8);
+    b_source(p, 656);
+    b_txt(p, 'daarna: 8.25 tot en met 8.34, over ontwikkelen en veranderen', 120, 706, tV, { size: 20, fill: COL.dim, anchor: 'start' });
+  }],
+
+  ['niveau', 'Netwerkcomponenten', (m) => {
+    const p = panel(0);
+    b_head(p, '8.20.01 · NETWERKCOMPONENTEN');
+    b_tab(0, .2);
+    b_kop(p, '8.20.01', 'het niveau van het netwerk');
+    const tC = m('comp'), tN = m('net');
+    // A network with its confidentiality level, and the components that are part of it, schematic.
+    const net = G(p, { o: 0 });
+    b_rect(net, 120, 270, 760, 360, { fill: COL.panel });
+    b_caps(net, 'NETWERK', 148, 312);
+    put(b_chip(net, 420, 288, 432, 'vertrouwelijkheidsniveau', { col: COL.task, fill: COL.task, hgt: 40, size: 16 }), { o: 1 });
+    show(net, .3);
+    [250, 500, 750].forEach((x, k) => {
+      const g = G(p, { o: 0 });
+      b_icon(g, 'keten', { x, y: 430, s: 1.2 });
+      T(g, 'component', { x, y: 492, size: 20, anchor: 'middle' });
+      show(g, .5 + k * .15);
+      show(put(b_tick(p, x, 550, COL.task), { o: 0 }), tC + 1 + k * .3);
+    });
+    show(b_box(p, 950, 396, 520, ['voldoen minimaal aan het', 'vertrouwelijkheidsniveau van hun netwerk'], { col: COL.task, fill: COL.task, hgt: 100, size: 22 }), tC);
+    b_arrow(p, 936, 894, 446, tN, { stroke: COL.task });
+  }],
+
+  ['beheer', 'Beheerinterfaces', (m) => {
+    const p = panel(0);
+    b_head(p, '8.20.02 · NETWERKCOMPONENTEN');
+    b_kop(p, '8.20.02', 'beheerinterfaces gescheiden');
+    const tI = m('int'), tG = m('gebr');
+    // The user network on one side; the component and its management interface on the other.
+    const users = G(p, { o: 0 });
+    b_rect(users, 120, 280, 520, 300, { fill: COL.panel });
+    b_caps(users, 'GEBRUIKERSNETWERK', 148, 320);
+    [250, 380, 510].forEach(x => b_icon(users, 'laptop', { x, y: 430, s: 1 }));
+    show(users, .3);
+    const mgmt = G(p, { o: 0 });
+    b_rect(mgmt, 940, 280, 520, 300, { fill: COL.panel });
+    b_caps(mgmt, 'NETWERKCOMPONENT', 968, 320);
+    b_icon(mgmt, 'keten', { x: 1200, y: 400, s: 1.3 });
+    put(b_chip(mgmt, 1070, 470, 260, 'beheerinterface', { col: COL.task, fill: COL.task, hgt: 44, size: 18 }), { o: 1 });
+    show(mgmt, .3);
+    // Separated as much as possible: no way through from the user network.
+    show(put(path(p, 'M790 250V640', { stroke: COL.task, 'stroke-width': 3, 'stroke-dasharray': '10 9' }), { o: 0 }), tI);
+    b_txt(p, 'toegang zo veel mogelijk gescheiden', 790, 692, tI, { size: 23, weight: 600, fill: COL.task });
+    b_arrow(p, 652, 760, 430, tG);
+    draw(path(p, 'M774 400V460', { stroke: COL.bad, 'stroke-width': 6 }, { d: 0 }), tG + .6, .4);
+  }],
+
+  ['koppel', 'Koppelpunten', (m) => {
+    const p = panel(0);
+    b_head(p, '8.21.01 · NETWERKDIENSTEN');
+    b_tab(1, .2);
+    b_kop(p, '8.21.01', 'koppelpunten beschermen');
+    const tP = m('punt'), tM = m('maat'), tS = m('sig');
+    const ext = G(p, { o: 0 });
+    b_rect(ext, 120, 280, 380, 250, { stroke: COL.dim, 'stroke-dasharray': '8 7' });
+    b_caps(ext, 'EXTERNE OF ONVERTROUWDE ZONE', 140, 316, { size: 14 });
+    b_icon(ext, 'wereld', { x: 310, y: 420, s: 1.3 });
+    show(ext, .3);
+    const own = G(p, { o: 0 });
+    b_rect(own, 1080, 280, 380, 250, { stroke: COL.good, sw: 3 });
+    b_caps(own, 'EIGEN NETWERK', 1104, 316, { fill: COL.good });
+    [1190, 1350].forEach(x => b_icon(own, 'server', { x, y: 420, s: 1 }));
+    show(own, .3);
+    show(put(path(p, 'M500 410H1080', { stroke: COL.dim, 'stroke-width': 3 }), { o: 0 }), .5);
+    // The connection point between them, where measures have been taken against attacks on availability.
+    show(b_box(p, 670, 370, 240, ['koppelpunt'], { col: COL.task, fill: COL.task, hgt: 80, size: 24 }), tP);
+    show(put(b_caps(p, 'OOK VANWEGE NETWERKSEGMENTATIE', 790, 354, { anchor: 'middle' }), { o: 0 }), tP + 2.8);
+    show(b_box(p, 120, 600, 420, ['aanval op de beschikbaarheid'], { col: COL.bad, fill: COL.bad, hgt: 64, size: 21 }), tM);
+    show(b_dart(p, 548, 610, 690, 462, { stroke: COL.bad }), tM + .4);
+    show(put(b_caps(p, 'MAATREGELEN GETROFFEN OM AANVALLEN TE', 820, 584, { fill: COL.task }), { o: 0 }), tM);
+    show(b_box(p, 820, 600, 230, ['signaleren'], { col: COL.task, fill: COL.task, hgt: 64, size: 22 }), tS);
+    show(b_box(p, 1070, 600, 230, ['mitigeren'], { col: COL.task, fill: COL.task, hgt: 64, size: 22 }), tS + 1.2);
+  }],
+
+  ['verkeer', 'Verkeer bewaken', (m) => {
+    const p = panel(0);
+    S.hd = b_head(p, '8.21.02 · NETWERKDIENSTEN');
+    S.kop = b_kop(p, '8.21.02', 'dataverkeer bewaken en analyseren');
+    const tV = m('verk'), tA = m('anal');
+    const zone = G(p, { o: 0 });
+    b_rect(zone, 120, 262, 400, 230, { stroke: COL.good, sw: 3 });
+    b_caps(zone, 'VERTROUWDE OMGEVING', 144, 298, { fill: COL.good });
+    [230, 400].forEach(x => b_icon(zone, 'server', { x, y: 390, s: 1 }));
+    show(zone, .3);
+    show(b_party(p, 1380, 376, 'wereld', 'daarbuiten', { s: 1.3, lab: 80 }), .3);
+    // The traffic to and from it is watched, and analysed for anything suspicious.
+    b_arrow(p, 534, 1300, 376, tV, { both: true });
+    b_txt(p, 'dataverkeer van en naar', 917, 356, tV, { size: 21, weight: 600 });
+    show(b_icon(p, 'loep', { x: 880, y: 432, s: 1, o: 0, stroke: COL.task }), tV + 1);
+    b_txt(p, 'bewaakt', 924, 440, tV + 1, { size: 21, weight: 600, fill: COL.task, anchor: 'start' });
+    show(b_box(p, 640, 490, 540, ['geanalyseerd met detectievoorzieningen'], { col: COL.task, fill: COL.task, hgt: 60, size: 21 }), tA);
+    show(b_chip(p, 1200, 500, 230, 'verdacht verkeer', { col: COL.bad, fill: COL.bad, hgt: 40, size: 16 }), tA + 1.6);
+  }],
+
+  ['delen', 'Dreigingen delen', (m) => {
+    // Same picture: new threats found this way are passed on and shared within the government.
+    const p = S.panel, tD = m('door'), tK = m('kader');
+    hide(S.kop, 0, .3); hide(S.hd, 0, .3);
+    b_head(p, '8.21.03 · NETWERKDIENSTEN', .3);
+    b_kop(p, '8.21.03', 'nieuwe dreigingen delen', .3);
+    show(b_box(p, 120, 610, 320, ['nieuwe dreiging'], { col: COL.bad, fill: COL.bad, hgt: 64, size: 22 }), .5);
+    b_arrow(p, 452, 646, 642, tD, { stroke: COL.task });
+    b_txt(p, 'doorgeleid', 549, 622, tD, { size: 20, weight: 600, fill: COL.task });
+    const gov = G(p, { o: 0 });
+    [700, 790, 880].forEach(x => b_icon(gov, 'overheid', { x, y: 640, s: .7 }));
+    T(gov, 'gedeeld binnen de overheid', { x: 950, y: 650, size: 22, weight: 600 });
+    show(gov, tD + .4);
+    show(b_dashed(p, 120, 700, 620, ['met inachtneming van de geldende juridische kaders'], { hgt: 56, size: 19 }), tK);
+  }],
+
+  ['versleutel', 'Versleutelen', (m) => {
+    const p = panel(0);
+    b_head(p, '8.21.04 · NETWERKDIENSTEN');
+    b_kop(p, '8.21.04', 'gegevens onderweg versleutelen');
+    const tD = m('draad'), tB = m('buiten'), tM = m('meta');
+    // Two kinds of connection on which data is encrypted: a lock on the line.
+    const link = (y, a, b, dash, label, t0) => {
+      const g = G(p, { o: 0 });
+      b_icon(g, a, { x: 190, y, s: 1 });
+      path(g, `M250 ${y}H700`, { stroke: COL.dim, 'stroke-width': 3, ...(dash ? { 'stroke-dasharray': '4 10' } : {}) });
+      b_icon(g, b, { x: 760, y, s: 1 });
+      mk('circle', { cx: 475, cy: y, r: 30, fill: COL.board, stroke: COL.task, 'stroke-width': 3 }, g);
+      b_icon(g, 'slot', { x: 475, y: y - 3, s: .8, stroke: COL.task });
+      T(g, label, { x: 150, y: y + 72, size: 21, weight: 600 });
+      show(g, t0);
+      return g;
+    };
+    link(320, 'laptop', 'server', true, 'draadloze verbinding, zoals wifi', tD);
+    const wired = link(500, 'server', 'overheid', false, 'bedrade verbinding buiten het gecontroleerd gebied', tB);
+    // The controlled area ends just past the server: the line leaves it.
+    b_rect(wired, 130, 452, 170, 96, { stroke: COL.dim, 'stroke-dasharray': '8 7' });
+    b_caps(wired, 'GECONTROLEERD GEBIED', 130, 440, { size: 13 });
+    show(b_dashed(p, 120, 620, 760, ['uitgezonderd: metagegevens die nodig zijn voor het transport'], { hgt: 60, size: 20 }), tM);
+  }],
+
+  ['inrichting', 'De inrichting', (m) => {
+    // Same picture: how the encryption is set up.
+    const p = S.panel, tT = m('term'), tN = m('niv'), tU = m('nbv'), tC = m('ciso');
+    show(put(b_caps(p, 'DE INRICHTING: RISICOGERICHT', 1000, 290, { fill: COL.task }), { o: 0 }), .4);
+    show(b_box(p, 1000, 306, 480, ['noodzakelijke beschermingstermijn'], { hgt: 60, size: 21 }), tT);
+    show(b_box(p, 1000, 378, 480, ['noodzakelijk beschermingsniveau'], { hgt: 60, size: 21 }), tN);
+    show(b_dashed(p, 1000, 466, 480, ['waar mogelijk: encryptiemiddelen met een', 'positief inzetadvies (Unit Weerbaarheid)'], { hgt: 90, size: 19 }), tU);
+    show(b_box(p, 1000, 574, 480, ['geen geadviseerd middel? In overleg met', 'de CISO een andere geschikte methodiek'], { col: COL.task, fill: COL.task, hgt: 90, size: 19 }), tC);
+  }],
+
+  ['groepen', 'Gescheiden groepen', (m) => {
+    const p = panel(0);
+    b_head(p, '8.22.01 · NETWERKSEGMENTATIE');
+    b_tab(2, .2);
+    b_kop(p, '8.22.01', 'elke groep een beveiligingsniveau');
+    const tN = m('niv');
+    // Three separated groups, schematic; each has a defined security level.
+    [...'ABC'].forEach((ch, k) => {
+      const x = 120 + k * 460, g = G(p, { o: 0 });
+      b_rect(g, x, 280, 420, 270, { fill: COL.panel });
+      b_caps(g, 'GROEP ' + ch, x + 28, 320);
+      [x + 130, x + 290].forEach(cx => b_icon(g, k === 1 ? 'server' : 'laptop', { x: cx, y: 410, s: 1 }));
+      show(g, .3 + k * .15);
+      show(b_chip(p, x + 60, 480, 300, 'beveiligingsniveau', { col: COL.task, fill: COL.task, hgt: 42, size: 17 }), tN + k * .4);
+    });
+    b_txt(p, 'SCHEMATISCH', 1460, 590, .8, { size: 15, fill: COL.faint, anchor: 'end', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    b_txt(p, 'alle gescheiden groepen hebben een gedefinieerd beveiligingsniveau', 800, 660, tN + 1.4, { size: 23, weight: 600, fill: COL.task });
+  }],
+
+  ['q1', 'Controlevraag', () => {
+    // The three network controls that have government measures, as cards to point at.
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 8.20 TOT EN MET 8.22');
+    b_tab(-1, .2);
+    b_txt(p, 'drie beheersmaatregelen over het netwerk', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.cards = C15_Q1.map(([nr, icon, lines], i) => {
+      const x = c15_q1X(i), g = b_tile(p, { x, y: 264, w: 300, h: 250, icon, lines, iconY: 112, iconS: 1.05, size: 21 });
+      T(g, nr, { x: x + 150, y: 312, size: 26, fill: COL.task, weight: 700, anchor: 'middle', font: MONO });
+      b_rise(g, .3 + i * .1);
+      return g;
+    });
+  }, { ask: done => {
+    const items = S.cards.map((g, i) => ({ el: g, box: [c15_q1X(i), 264, 300, 250], label: C15_Q1[i][0] + ' ' + C15_Q1[i][2].join(' ') }));
+    const about = ['Dat gaat over netwerkcomponenten en hun beheer.', 'Dat gaat over netwerkdiensten: bewaken en versleutelen.', 'Dat gaat over gescheiden groepen in het netwerk.'];
+    quiz(WIDE, [{
+      id: 'c-netwerk-1', prompt: ['De beheerinterface van een switch is bereikbaar vanaf het kantoornetwerk. Welke maatregel?'],
+      build: pickEls(items, 0, '8.20.02: de toegang tot beheerinterfaces is zo veel mogelijk gescheiden van het gebruikersnetwerk.',
+        i => about[i] + ' Beheerinterfaces staan in 8.20.02.'),
+    }, {
+      id: 'c-netwerk-2', prompt: ['Verkeer over de wifi gaat onversleuteld. Welke maatregel geldt?'],
+      build: pickEls(items, 1, '8.21.04: bij draadloze verbindingen zoals wifi worden gegevens versleuteld.',
+        i => about[i] + ' Versleutelen onderweg staat in 8.21.04.'),
+    }, {
+      id: 'c-netwerk-3', prompt: ['Een afgescheiden groep in het netwerk heeft geen beveiligingsniveau. Welke maatregel geldt?'],
+      build: pickEls(items, 2, '8.22.01: alle gescheiden groepen hebben een gedefinieerd beveiligingsniveau.',
+        i => about[i] + ' Het beveiligingsniveau van een groep staat in 8.22.01.'),
+    }], done);
+  } }],
+
+  ['beleid1', 'Cryptografiebeleid', (m) => {
+    const p = panel(0);
+    b_head(p, '8.24.01 · CRYPTOGRAFIE');
+    b_tab(4, .2);
+    b_kop(p, '8.24.01', 'wat het cryptografiebeleid minimaal uitwerkt');
+    // The policy as a sheet; the first four topics appear, each on its sentence.
+    const sheet = G(p, { o: 0, y: 14 });
+    b_rect(sheet, 100, 244, 1400, 500, { fill: COL.panel });
+    b_caps(sheet, 'CRYPTOGRAFIEBELEID', 128, 286, { size: 16 });
+    b_rise(sheet, m('beleid'));
+    [0, 1, 2, 3].forEach(k => c15_topic(p, k, m('p' + (k + 1))));
+  }],
+
+  ['beleid2', 'Beleid, vervolg', (m) => {
+    [4, 5, 6].forEach(k => c15_topic(S.panel, k, m('p' + (k + 1))));
+  }],
+
+  ['inventaris', 'In de inventaris', (m) => {
+    const p = panel(0);
+    b_head(p, '8.24.02 · CRYPTOGRAFIE');
+    b_kop(p, '8.24.02', 'cryptografie in de inventaris');
+    const tW = m('waar'), tWie = m('wie'), tA = m('act');
+    const inv = b_sheet(p, 120, 262, 560, 330, 'INVENTARIS VAN BEDRIJFSMIDDELEN');
+    [336, 486, 536].forEach(y => mk('rect', { x: 148, y, width: 504, height: 26, rx: 4, fill: COL.edge }, inv));
+    b_rise(inv, .3);
+    show(b_box(p, 148, 392, 504, ['cryptografische beheersmaatregelen'], { col: COL.task, fill: COL.task, hgt: 64, size: 21 }), 1.2);
+    // For each of them three things are established.
+    show(put(b_caps(p, 'VOOR ELK VASTGESTELD', 800, 316), { o: 0 }), tW - .2);
+    b_arrow(p, 692, 786, 424, tW - .2, { stroke: COL.task });
+    [['waar ze worden ingezet', tW], ['wie ervoor verantwoordelijk is', tWie], ['hoe ze actueel worden gehouden', tA]].forEach(([str, t0], k) =>
+      show(b_box(p, 800, 330 + k * 76, 560, [str], { hgt: 62, size: 22 }), t0));
+  }],
+
+  ['sterkte', 'De sterkte', (m) => {
+    const p = panel(0);
+    b_head(p, '8.24.04 · CRYPTOGRAFIE');
+    b_kop(p, '8.24.04', 'de sterkte van de cryptografie');
+    const tV = m('verv'), tA = m('adv'), tU = m('unit');
+    show(b_chip(p, 1230, 158, 250, '8.24.03 · vervallen', { hgt: 40, size: 16, fill: COL.dim }), tV);
+    // The strength, as a bar, follows current advice from two sides.
+    const gauge = G(p, { o: 0 });
+    b_caps(gauge, 'STERKTE VAN DE CRYPTOGRAFIE', 900, 364);
+    b_rect(gauge, 900, 380, 560, 40, { fill: COL.panel, rx: 6 });
+    show(gauge, .3);
+    show(put(b_caps(p, 'ACTUELE ADVIEZEN VAN', 120, 316, { fill: COL.task }), { o: 0 }), tA);
+    show(b_chip(p, 120, 330, 500, 'NCSC', { hgt: 58, size: 22 }), tA);
+    show(b_chip(p, 120, 412, 500, 'Unit Weerbaarheid van het NBV van de AIVD', { hgt: 58, size: 17 }), tU);
+    b_arrow(p, 640, 886, 400, tA + .4, { stroke: COL.task });
+    b_txt(p, 'gebaseerd op', 763, 380, tA + .4, { size: 20, weight: 600, fill: COL.task });
+    draw(path(p, 'M920 400H1360', { stroke: COL.task, 'stroke-width': 24 }, { d: 0 }), tA + .8, 1.4);
+  }],
+
+  ['reserve', 'Reservecertificaten', (m) => {
+    const p = panel(0);
+    b_head(p, '8.24.05 · CRYPTOGRAFIE');
+    b_kop(p, '8.24.05', 'reservecertificaten');
+    const tA = m('afspr'), tL = m('als');
+    show(b_party(p, 250, 390, 'cert', 'certificaat in gebruik', { s: 1.6, lab: 100 }), .3);
+    // A spare one from another supplier, agreed on beforehand (dashed: it is there for when it is needed).
+    const spare = G(p, { o: 0 });
+    b_rect(spare, 520, 280, 460, 230, { fill: COL.panel, stroke: COL.task, sw: 3, 'stroke-dasharray': '10 8' });
+    b_icon(spare, 'cert', { x: 610, y: 392, s: 1.4, stroke: COL.task });
+    T(spare, 'reservecertificaat', { x: 690, y: 380, size: 23, weight: 600, fill: COL.task });
+    T(spare, 'van een alternatieve leverancier', { x: 690, y: 412, size: 18, fill: COL.dim });
+    show(spare, tA);
+    show(b_box(p, 520, 540, 460, ['afspraken gemaakt'], { hgt: 60, size: 22 }), tA + 1.6);
+    show(b_box(p, 1050, 330, 410, ['als uit de risicoafweging', 'blijkt dat ze nodig zijn'], { col: COL.task, fill: COL.task, hgt: 100, size: 21 }), tL);
+    show(put(b_matrix(p, 1420, 300, .6), { o: 0 }), tL);
+    show(put(b_caps(p, 'VOOR DE BEDRIJFSCONTINUÏTEIT · ZIE 5.30', 1050, 470), { o: 0 }), tL + 1.8);
+  }],
+
+  ['tien', '8.25 tot en met 8.34', (m) => {
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 8.25 TOT EN MET 8.34');
+    // The strip changes to the second half: developing and changing. Each run without a government measure is one dashed step.
+    hide(S.tabsG, 0, .3);
+    b_tabs(C15_TABS2, .4);
+    [0, 2, 7].forEach(b_tabNone);
+    const tV = m('vijf'), tG = m('geen');
+    let withNr = 0, without = 0;
+    C15_DEV.forEach((c, i) => b_ctrl(p, c, 120 + (i % 4) * 346, 150 + Math.floor(i / 4) * 184, i,
+      c.nrs.length ? tV + .2 + withNr++ * .25 : tG + .2 + without++ * .12));
+    b_txt(p, 'samen zeven overheidsmaatregelen', 1150, 612, tV + 1.8, { size: 26, weight: 600, fill: COL.task });
+    b_source(p, 716);
+  }],
+
+  ['ontwerp', 'Veilig ontwerpen', (m) => {
+    const p = panel(0);
+    b_head(p, '8.27.01 · VEILIG ONTWERPEN');
+    b_tab(1, .2);
+    b_kop(p, '8.27.01', 'architectuurprincipes');
+    const tV = m('vier'), tA = m('alle');
+    // The principles, with the two the BIO2 names.
+    const sheet = b_sheet(p, 120, 262, 560, 330, 'ARCHITECTUURPRINCIPES, ZOALS');
+    b_term(sheet, 'security by design', 'security-by-design-only', { x: 148, y: 360, size: 24, o: 1 });
+    T(sheet, 'veiligheid vanaf het ontwerp', { x: 148, y: 392, size: 19, fill: COL.dim });
+    b_term(sheet, 'security by default', 'security-by-default', { x: 148, y: 466, size: 24, o: 1 });
+    T(sheet, 'standaard ingeschakeld', { x: 148, y: 498, size: 19, fill: COL.dim });
+    b_caps(sheet, 'VOOR HET ONTWERPEN VAN DE BEVEILIGING', 148, 562, { size: 14 });
+    b_rise(sheet, .3);
+    // Four things happen with them, for every activity in developing information systems.
+    b_arrow(p, 692, 766, 380, tV, { stroke: COL.task });
+    ['vastgesteld', 'gedocumenteerd', 'onderhouden', 'toegepast'].forEach((str, k) =>
+      show(b_box(p, 780 + (k % 2) * 350, 300 + (k >> 1) * 90, 330, [str], { col: COL.task, fill: COL.task, hgt: 70, size: 23 }), tV + k * .9));
+    show(b_box(p, 780, 520, 680, ['voor alle activiteiten over het ontwikkelen', 'van informatiesystemen'], { hgt: 96, size: 21 }), tA);
+  }, { hold: true }],   // the lesson waits here: the two English terms can be heard before it goes on
+
+  ['testen', 'Acceptatietesten', (m) => {
+    const p = panel(0);
+    b_head(p, '8.29.01 · TESTEN');
+    b_tab(3, .2);
+    b_kop(p, '8.29.01', 'acceptatietesten');
+    const tM = m('meth'), tA = m('auto'), tV = m('versl');
+    show(b_party(p, 220, 400, 'server', 'nieuw systeem', { s: 1.5, lab: 88 }), .3);
+    b_arrow(p, 310, 426, 400, tM);
+    show(b_box(p, 440, 350, 440, ['gestructureerde', 'testmethodieken'], { col: COL.task, fill: COL.task, hgt: 100, size: 23 }), tM);
+    show(b_dashed(p, 440, 480, 440, ['waar mogelijk geautomatiseerd'], { hgt: 60, size: 21 }), tA);
+    b_arrow(p, 892, 986, 400, tV, { stroke: COL.task });
+    b_rise(b_sheet(p, 1000, 300, 440, 200, 'VERSLAG VAN DE RESULTATEN', 3), tV);
+  }],
+
+  ['uitbesteed', 'Uitbesteden', (m) => {
+    const p = panel(0);
+    b_head(p, '8.30.01 · UITBESTEDE ONTWIKKELING');
+    b_tab(4, .2);
+    b_kop(p, '8.30.01', 'uitbestede ontwikkeling');
+    const tO = m('onv'), tA = m('aanv');
+    show(b_party(p, 340, 320, 'overheid', 'organisatie', { s: .9, lab: 70 }), .3);
+    show(b_party(p, 1120, 320, 'bedrijf', 'leverancier', { s: 1.1, lab: 70 }), .3);
+    show(b_box(p, 120, 450, 440, ['interne maatregelen voor', 'systeemontwikkeling'], { hgt: 100, size: 22 }), .5);
+    // The same measures apply in full to what is outsourced, with those that follow from outsourcing added.
+    b_arrow(p, 572, 886, 500, tO, { stroke: COL.task });
+    b_txt(p, 'onverkort van toepassing', 729, 480, tO, { size: 20, weight: 600, fill: COL.task });
+    show(b_box(p, 900, 450, 440, ['dezelfde maatregelen'], { col: COL.task, fill: COL.task, hgt: 100, size: 23 }), tO + .6);
+    show(b_box(p, 900, 570, 440, ['+ maatregelen vanuit de uitbesteding'], { hgt: 64, size: 21 }), tA);
+  }],
+
+  ['productie', 'Niet in productie', (m) => {
+    const p = panel(0);
+    S.hd = b_head(p, '8.31.01 · ONTWIKKEL, TEST EN PRODUCTIE');
+    b_tab(5, .2);
+    S.kop = b_kop(p, '8.31.01', 'niet testen in productie');
+    const tN = m('niet'), tP = m('pe');
+    c15_envs(p, .3);
+    // Testing does not happen in production; only the process owner can approve an exception, beforehand.
+    S.noTest = G(p);
+    show(b_box(S.noTest, 1040, 500, 420, ['testen in productie'], { hgt: 60, size: 22 }), tN);
+    draw(path(S.noTest, 'M1030 566L1470 494', { stroke: COL.bad, 'stroke-width': 5 }, { d: 0 }), tN + .6, .5);
+    S.exc = b_dashed(p, 120, 620, 900, ['afwijken kan alleen met voorafgaande goedkeuring door de proceseigenaar'], { hgt: 60, size: 20 });
+    show(S.exc, tP);
+    show(b_role(p, 1250, 650, 'proceseigenaar', COL.task), tP);
+  }],
+
+  ['significant', 'Eerst testen', (m) => {
+    // Same picture: a significant change is tested before it goes into production.
+    const p = S.panel, tS = m('sig'), tP = m('pe');
+    hide(S.kop, 0, .3); hide(S.hd, 0, .3); hide(S.noTest, 0, .4);
+    b_head(p, '8.31.02 · ONTWIKKEL, TEST EN PRODUCTIE', .3);
+    b_kop(p, '8.31.02', 'significante wijzigingen eerst testen', .3);
+    const chip = b_chip(p, 205, 424, 250, 'significante wijziging', { col: COL.task, fill: COL.task, hgt: 36, size: 14, bg: COL.board });
+    show(chip, tS, .3);
+    tw(chip, { x: 460 }, tS + .6, 1, io);
+    show(put(b_tick(p, 950, 442), { o: 0 }), tS + 1.8);
+    tw(chip, { x: 920 }, tS + 2.8, 1, io);
+    b_txt(p, 'altijd getest voordat het in productie komt', 790, 540, tS + 2, { size: 24, weight: 600, fill: COL.task });
+    tw(S.exc.firstChild, { c_stroke: COL.task }, tP, .5);
+  }],
+
+  ['wijziging', 'Wijzigingsbeheer', (m) => {
+    const p = panel(0);
+    b_head(p, '8.32.01 · WIJZIGINGSBEHEER');
+    b_tab(6, .2);
+    b_kop(p, '8.32.01', 'het wijzigingsbeheerproces');
+    const ys = [322, 468, 628];
+    // Three things the process attends to at least, numbered; each appears on its sentence.
+    const row = (k, main, subs, t0) => {
+      const y = ys[k], g = G(p, { o: 0 });
+      b_num(g, k + 1, 120, y - 24);
+      T(g, main, { x: 190, y: y + 2, size: 24, weight: 600 });
+      subs.forEach((str, n) => T(g, str, { x: 190, y: y + 32 + n * 25, size: 19, fill: COL.dim }));
+      show(g, t0);
+      return g;
+    };
+    row(0, 'wijzigingen administreren', ['met de resultaten van het testplan'], m('w1'));
+    const r2 = row(1, 'risicoafweging van mogelijke gevolgen', ['inclusief een beschreven plan om terug te draaien:'], m('w2'));
+    b_term(r2, 'rollback-plan', 'rollback-plan', { x: 190, y: ys[1] + 62, size: 20, o: 1 });
+    row(2, 'de goedkeuringsprocedure', ['voor wijzigingen'], m('w3'));
+    show(b_icon(p, 'doc', { x: 1100, y: 330, s: 1.3, o: 0, stroke: COL.task }), m('w1') + .3);
+    show(put(b_matrix(p, 1100, 480, 1.1), { o: 0 }), m('w2') + .3);
+    const stamp = b_stamp(p, 1100, 640, 'GOEDGEKEURD');
+    show(stamp, m('w3') + .3);
+  }, { hold: true }],   // the lesson waits here: the English term can be heard before it goes on
+
+  ['raamwerk', 'Beheerraamwerk', (m) => {
+    const p = panel(0);
+    b_head(p, '8.32.02 · WIJZIGINGSBEHEER');
+    b_kop(p, '8.32.02', 'een geaccepteerd beheerraamwerk');
+    const tR = m('raam');
+    // The process, schematic, standing on a framework.
+    const proc = G(p, { o: 0 });
+    b_rect(proc, 360, 290, 880, 180, { fill: COL.panel });
+    b_caps(proc, 'WIJZIGINGSBEHEER', 388, 330);
+    b_caps(proc, 'SCHEMATISCH', 1212, 330, { fill: COL.faint, anchor: 'end' });
+    [0, 1, 2, 3].forEach(k => {
+      mk('rect', { x: 388 + k * 218, y: 366, width: 170, height: 64, rx: 6, fill: COL.board, stroke: COL.edge, 'stroke-width': 2 }, proc);
+      if (k < 3) path(proc, `M${564 + k * 218} 398H${600 + k * 218}`, { stroke: COL.dim, 'stroke-width': 3 });
+    });
+    show(proc, .3);
+    b_txt(p, 'op basis van', 800, 512, tR, { size: 21, weight: 600, fill: COL.task });
+    show(b_box(p, 300, 530, 1000, ['een algemeen geaccepteerd beheerraamwerk'], { col: COL.task, fill: COL.task, hgt: 84, size: 26 }), tR);
+  }],
+
+  ['q2', 'Controlevraag', () => {
+    // Four controls of the second part of the chapter as cards to point at.
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 8.24 TOT EN MET 8.32');
+    b_tab(-1, .2);
+    b_txt(p, 'vier beheersmaatregelen over cryptografie en veranderen', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.cards = b_cards(p, C15_Q2);
+  }, { ask: done => {
+    const items = b_cardItems(S.cards, C15_Q2);
+    const about = ['Dat gaat over cryptografie.', 'Dat gaat over acceptatietesten.', 'Dat gaat over testen en de productieomgeving.', 'Dat gaat over wijzigingsbeheer.'];
+    quiz(WIDE, [{
+      id: 'c-veranderen-1', prompt: ['Een significante wijziging gaat zonder test naar productie. Welke maatregel geldt?'],
+      build: pickEls(items, 2, '8.31.02: significante wijzigingen worden altijd getest; afwijken kan alleen met voorafgaande goedkeuring door de proceseigenaar.',
+        i => about[i] + ' Testen vóór productie staat in 8.31.02.'),
+    }, {
+      id: 'c-veranderen-2', prompt: ['Er is geen plan om een mislukte wijziging terug te draaien. Welke maatregel geldt?'],
+      build: pickEls(items, 3, '8.32.01: het wijzigingsbeheerproces bevat een risicoafweging, inclusief een beschreven rollback-plan.',
+        i => about[i] + ' Het rollback-plan staat in 8.32.01.'),
+    }, {
+      id: 'c-veranderen-3', prompt: ['Niemand weet wie de cryptografische sleutels beheert. Welke maatregel regelt dat?'],
+      build: pickEls(items, 0, '8.24.01: het cryptografiebeleid werkt uit wie verantwoordelijk is voor het sleutelbeheer.',
+        i => about[i] + ' Het sleutelbeheer staat in het cryptografiebeleid, 8.24.01.'),
+    }], done);
+  } }],
+
+  ['wrap', 'Samenvatting', (m) => {
+    const p = panel(0);
+    b_head(p, 'SAMENVATTING');
+    hide(S.tabsG, 0, .4);
+    b_wrap(p, [
+      ['Netwerkcomponenten op niveau, beheer gescheiden.', 'Koppelpunten beschermd, verkeer bewaakt, en gegevens onderweg versleuteld.', 'w1'],
+      ['Een cryptografiebeleid met zeven onderwerpen.', 'Wanneer, wie, welke normen; de sterkte volgt de actuele adviezen.', 'w2'],
+      ['Veilig ontworpen en getest.', 'Architectuurprincipes, acceptatietesten, en dezelfde maatregelen bij uitbesteding.', 'w3'],
+      ['Niet testen in productie; wijzigingen eerst getest.', 'Afwijken alleen met goedkeuring vooraf; wijzigen via het wijzigingsbeheerproces.', 'w4'],
+    ], m);
+  }],
+
+  ['final1', 'Oefenronde 1', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-stellingen', prompt: ['Klopt het, of klopt het niet?'],
+    build: grid([
+      { parts: ['Gegevens over wifi worden versleuteld.'], ans: ['k'], why: 'Net als bij bedrade verbindingen buiten het gecontroleerde gebied.' },
+      { parts: ['Beheerinterfaces van netwerkcomponenten zijn bereikbaar vanaf het gebruikersnetwerk.'], ans: ['n'], why: 'De toegang is zo veel mogelijk gescheiden van het gebruikersnetwerk.' },
+      { parts: ['In de productieomgeving wordt getest, tenzij de proceseigenaar het verbiedt.'], ans: ['n'], why: 'Andersom: er wordt niet getest, tenzij de proceseigenaar vooraf goedkeurt dat ervan wordt afgeweken.' },
+      { parts: ['Bij uitbestede ontwikkeling gelden de interne maatregelen onverkort.'], ans: ['k'], why: 'Aangevuld met maatregelen die uit de uitbesteding volgen.' },
+      { parts: ['Hoe sterk de cryptografie is, kiest elke afdeling zelf.'], ans: ['n'], why: 'De sterkte is gebaseerd op de actuele adviezen van het NCSC en de Unit Weerbaarheid van het NBV van de AIVD.' },
+    ], KN, { multi: false, text: true }),
+  }], done, 'Oefenronde 1 van 2') }],
+
+  ['final2', 'Oefenronde 2', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-middel', prompt: ['Wat gebeurt er als de Unit Weerbaarheid geen encryptiemiddel heeft geadviseerd?'],
+    build: choice([['In overleg met de CISO wordt een andere geschikte methodiek gekozen.'], ['Dan hoeft er niet te worden versleuteld.'], ['Dan kiest de leverancier.']], 0,
+      'En die wordt ook ingericht.',
+      [null, 'Versleutelen blijft nodig. In overleg met de CISO wordt een andere geschikte methodiek gekozen.',
+        'Niet de leverancier: in overleg met de CISO wordt een andere geschikte methodiek gekozen.']),
+  }, {
+    id: 'p-wijzigen', prompt: ['Waaraan besteedt het wijzigingsbeheerproces minimaal aandacht?'],
+    build: choice([['Alleen aan een lijst van wijzigingen.'], ['Aan administratie met testresultaten, een risicoafweging met rollback-plan, en de goedkeuring.'], ['Aan een jaarlijkse controle achteraf.']], 1,
+      'Drie dingen: administreren, de risico’s afwegen en goedkeuren.',
+      ['Een lijst is niet genoeg: ook de testresultaten, een risicoafweging met rollback-plan en de goedkeuringsprocedure.', null,
+        'Het gaat om vooraf: administratie met testresultaten, een risicoafweging met rollback-plan, en de goedkeuring.']),
+  }, {
+    id: 'p-goedkeuren', prompt: ['Wie kan vooraf goedkeuren dat toch in productie wordt getest?'],
+    build: choice([['De leverancier.'], ['Iedere beheerder.'], ['De proceseigenaar.']], 2,
+      'Alleen met die voorafgaande goedkeuring kan worden afgeweken.',
+      ['Niet de leverancier: alleen de proceseigenaar kan dat vooraf goedkeuren.',
+        'Niet iedere beheerder: alleen de proceseigenaar kan dat vooraf goedkeuren.', null]),
+  }], done, 'Oefenronde 2 van 2 · vraag') }],
+
+  ['finish', 'Afgerond', () => { panel(0); }, { ask: finishCard }],
+].map(([id, title, run, extra]) => ({ id, title, run, ...extra }));
+
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weten wat je hebt · BIO2 in beeld</title>
+<link rel="stylesheet" href="../lib/engine.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2314171a'/%3E%3Cpath d='M15 52V38M27 52V20M39 52V32M51 52V14' stroke='%238d959d' stroke-width='7'/%3E%3Cpath d='M7 28H57' stroke='%23c9a45c' stroke-width='4'/%3E%3C/svg%3E">
+<link rel="expect" href="#bar" blocking="render"><!-- hold the first frame until the player exists, so the page transition can run -->
+</head>
+<body>
+<script src="../lib/engine.js"></script>
+<script src="audio/nl/timings.js"></script>
+<script>
+'use strict';
+// Hoofdstuk 7: de overheidsmaatregelen 5.09.01 tot en met 5.14.05 van de BIO2 (pagina 15 en 16): de inventaris van
+// bedrijfsmiddelen, gedragsregels, classificeren en het overdragen van informatie.
+// Beat ids match content/bio2/ch07/narration.nl.json. One idea per beat.
+const CHAPTER = { number: 7, title: 'Weten wat je hebt en hoe je het deelt', minutes: 7, language: 'nl', next: '../ch08/' };
+
+/* ---------- chapter data (used by the helpers and inside BEATS, so defined first) ---------- */
+const C7_TABS = ['5.09', '5.10', '5.11', '5.12', '5.13', '5.14'];
+// Six controls of ISO 27002 (topics shortened, in our own words) with their government measures in the BIO2.
+const C7_CTRL = [
+  { code: '5.9', topic: ['inventaris van informatie', 'en bedrijfsmiddelen'], nrs: ['5.09.01'] },
+  { code: '5.10', topic: ['aanvaardbaar gebruik', 'van bedrijfsmiddelen'], nrs: ['5.10.02', '5.10.03'], note: ['5.10.01: geen overheidsmaatregel', '5.10.02 en 5.10.03 komen uit 5.04'] },
+  { code: '5.11', topic: ['bedrijfsmiddelen', 'retourneren'], nrs: [] },
+  { code: '5.12', topic: ['informatie', 'classificeren'], nrs: ['5.12.01'] },
+  { code: '5.13', topic: ['informatie', 'labelen'], nrs: [] },
+  { code: '5.14', topic: ['informatie', 'overdragen'], nrs: ['5.14.01', '5.14.02', '5.14.03', '5.14.04', '5.14.05'] },
+];
+// The inventory (5.09.01), schematic. Four assets inside the organisation: [icon, x, y, label there, name in the inventory].
+const C7_OWN = [
+  ['server', 230, 380, 'server', 'server'],
+  ['laptop', 430, 380, 'laptop', 'laptop'],
+  ['code', 230, 560, 'applicatie', 'applicatie'],
+  ['tandwiel', 430, 560, 'besturing gemaal', 'besturing van een gemaal'],
+];
+// Three kinds the measure names separately: [icon, y beside the organisation, label there, name in the inventory, mark].
+const C7_ALSO = [
+  ['laptop', 322, ['op afstand'], 'bedrijfsmiddel op afstand', 'afstand'],
+  ['wolk', 474, ['cloud-omgeving'], 'cloud-omgeving', 'cloud'],
+  ['laptop', 626, ['regelmatig verbonden,', 'niet onder controle'], 'verbonden, niet onder controle', 'verbonden'],
+];
+const c7_rowY = i => 318 + i * 60;
+// Five assets as cards for the first quick check: [icon, label].
+const C7_Q1 = [
+  ['server', ['server in de', 'eigen serverruimte']],
+  ['laptop', ['laptop van de', 'organisatie, bij een', 'medewerker thuis']],
+  ['wolk', ['cloud-omgeving']],
+  ['tandwiel', ['besturing van', 'een gemaal']],
+  ['laptop', ['laptop van een', 'leverancier, regelmatig', 'aan het netwerk']],
+];
+const c7_q1X = i => 96 + i * 284;
+// What 5.14.04 asks a current registration of: [icon, label, small print].
+const C7_REG = [
+  ['server', ['informatiesystemen', 'bereikbaar vanaf internet']],
+  ['code', ['webapplicaties']],
+  ['adres', ['IP-adressen']],
+  ['api', ['API’s'], 'koppelvlakken'],
+];
+// The four controls that have government measures, as cards for the second quick check: [number, icon, label].
+const C7_Q2 = [['5.09', 'proc', ['inventaris']], ['5.10', 'doc', ['gedragsregels']], ['5.12', null, ['classificeren']], ['5.14', 'wereld', ['informatie', 'overdragen']]];
+const c7_q2X = i => 146 + i * 336;
+Object.assign(ICON, {
+  mail: 'M-34 -22H34V22H-34Z M-34 -22L0 6L34 -22',
+  adres: 'M-44 -12H-22V12H-44Z M-11 -12H11V12H-11Z M22 -12H44V12H22Z M-16.5 9V12 M16.5 9V12',
+  api: 'M-42 0H-18 M-18 -15V15 M-18 -8H-2 M-18 8H-2 M42 0H20 M20 -15H6V15H20Z',
+});
+
+/* ---------- chapter drawing helpers (prefixed c7_; the shared b_ helpers live in ../lib/engine.js,
+   among them b_caps and b_year, which started in this chapter, and the icons 'wereld' and 'cert') ---------- */
+// Row i of the inventory (S.sheet): a small icon, a name and three bars for its properties. Returns the group, hidden.
+const c7_row = (i, icon, name, lit = false) => {
+  const y = c7_rowY(i), g = G(S.sheet, { o: 0 });
+  b_icon(g, icon, { x: 912, y: y + 26, s: .5 });
+  T(g, name, { x: 948, y: y + 33, size: 20 });
+  g._bars = [0, 1, 2].map(k => mk('rect', { x: 1330 + k * 44, y: y + 19, width: 34, height: 14, rx: 3, fill: lit ? COL.dim : COL.edge }, g));
+  path(g, `M888 ${y + 56}H1452`, { stroke: COL.edge, 'stroke-width': 1.5 });
+  return g;
+};
+// A copy of an asset travels from (x,y) to row i of the inventory and gives way to the row's own icon.
+const c7_fly = (p, icon, x, y, s, i, t0) => {
+  const g = b_icon(p, icon, { x, y, s, o: 0 });
+  show(g, t0, .15); tw(g, { x: 912, y: c7_rowY(i) + 26, s: .5 }, t0 + .1, .7, io); hide(g, t0 + .7, .2);
+};
+// A certificate as a small card with its top left at (x,y). Returns the group, hidden.
+const c7_cert = (p, x, y, w, main, sub) => {
+  const g = G(p, { o: 0 });
+  b_rect(g, x, y, w, 76, { fill: COL.panel, stroke: COL.task, rx: 6 });
+  b_icon(g, 'cert', { x: x + 44, y: y + 34, s: .62, stroke: COL.task });
+  T(g, main, { x: x + 88, y: y + 33, size: 21, weight: 700, fill: COL.task, font: MONO });   // monospace: PKIo must not read as PKlo
+  T(g, sub, { x: x + 88, y: y + 59, size: 17, fill: COL.dim, font: MONO });
+  return g;
+};
+
+/* ---------- beats: [id, title, run(m, D), { ask, hold }?] ---------- */
+const BEATS = [
+  ['intro', 'Weten wat je hebt', (m, D) =>
+    b_title(m, D, 'DEEL B · MAATREGELEN VOOR DE ORGANISATIE · HOOFDSTUK 7', 'Weten wat je hebt', 'En hoe je het deelt: inventaris, gedragsregels, classificeren en overdragen.')],
+
+  ['zes', '5.09 tot en met 5.14', (m) => {
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 5.09 TOT EN MET 5.14');
+    // The strip of this chapter: the six controls. The two without a government measure get a dashed frame.
+    b_tabs(C7_TABS, .4);
+    C7_CTRL.forEach((c, i) => { if (!c.nrs.length) b_tabNone(i); });
+    const tV = m('vier'), tT = m('twee');
+    let withNr = 0, without = 0;
+    C7_CTRL.forEach((c, i) => {
+      const x = 120 + (i % 3) * 466, y = 176 + Math.floor(i / 3) * 286, g = G(p, { o: 0, y: 12 });
+      b_rect(g, x, y, 440, 262, { fill: COL.panel });
+      T(g, c.code, { x: x + 24, y: y + 52, size: 34, fill: COL.iso, weight: 700, font: MONO });
+      c.topic.forEach((str, k) => T(g, str, { x: x + 24, y: y + 92 + k * 28, size: 21 }));
+      tw(g, { o: 1, y: 0 }, .3 + i * .1, .5, out);
+      if (c.nrs.length) {
+        const t0 = tV + .2 + withNr++ * .3;
+        c.nrs.forEach((nr, k) => show(b_chip(g, x + 24 + (k % 3) * 132, y + 156 + Math.floor(k / 3) * 50, 122, nr, { col: COL.task, fill: COL.task, hgt: 42, size: 19 }), t0 + k * .08));
+        if (c.note) c.note.forEach((str, k) => show(T(g, str, { x: x + 24, y: y + 226 + k * 20, size: 15, fill: COL.dim, font: MONO, o: 0 }), t0 + .6));
+      } else {
+        const t0 = tT + .2 + without++ * .3;
+        show(T(g, 'geen overheidsmaatregel', { x: x + 24, y: y + 176, size: 17, fill: COL.dim, font: MONO, o: 0 }), t0);
+        show(b_chip(g, x + 24, y + 196, 272, 'richtlijn uit ISO 27002', { col: COL.iso, fill: COL.iso, hgt: 42, size: 18 }), t0 + 1.6);
+      }
+    });
+    b_txt(p, 'BRON ONDERWERPEN: NEN-EN-ISO/IEC 27002:2022 · VERKORT WEERGEGEVEN', 120, 772, 1.6, { size: 14, fill: COL.faint, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+  }],
+
+  ['inventaris', 'De inventaris', (m) => {
+    const p = panel(0);
+    b_head(p, '5.09.01 · INVENTARIS VAN BEDRIJFSMIDDELEN');
+    b_tab(0, .2);
+    b_kop(p, '5.09.01', 'een inventaris van bedrijfsmiddelen');
+    const tI = m('inv'), tO = m('ot'), tE = m('eig');
+    // The organisation and four of its assets, schematic.
+    const land = G(p, { o: 0 });
+    b_rect(land, 120, 250, 420, 450, { fill: COL.panel });
+    b_caps(land, 'DE ORGANISATIE', 144, 284);
+    show(land, .3);
+    S.own = C7_OWN.map(([icon, x, y, label], i) => {
+      const g = G(p, { o: 0 }), ic = b_icon(g, icon, { x, y, s: 1.2 });
+      const lab = T(g, label, { x, y: y + 66, size: 20, anchor: 'middle' });
+      show(g, .4 + i * .12);
+      return { ic, lab };
+    });
+    // The inventory: a list with a row for every asset. The assets travel to their rows.
+    const sheet = S.sheet = G(p, { o: 0, y: 14 });
+    b_rect(sheet, 860, 244, 620, 506, { fill: COL.panel });
+    b_caps(sheet, 'INVENTARIS', 888, 284, { size: 16 });
+    path(sheet, 'M888 298H1452', { stroke: COL.edge, 'stroke-width': 2 });
+    b_rise(sheet, tI);
+    S.inv = C7_OWN.map(([icon, x, y, , name], i) => {
+      const t0 = tI + .8 + i * .35, g = c7_row(i, icon, name);
+      c7_fly(p, icon, x, y, 1.2, i, t0); show(g, t0 + .65, .3);
+      return g;
+    });
+    b_txt(p, 'SCHEMATISCH', 860, 776, tI + .4, { size: 15, fill: COL.faint, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    S.notes = G(p);
+    b_txt(S.notes, 'van belang voor informatieverwerking', 330, 736, tI + .4, { size: 21, fill: COL.dim });
+    // Operational technology belongs in it too.
+    const ot = S.own[3];
+    tw(ot.ic._line, { c_stroke: COL.task }, tO, .4); tw(ot.lab, { c_fill: COL.task }, tO, .4);
+    show(b_chip(S.inv[3], 1214, c7_rowY(3) + 11, 60, 'OT', { col: COL.task, fill: COL.task, hgt: 30, size: 16 }), tO + .2);
+    b_txt(S.notes, 'met inbegrip van operationele technologie (OT)', 330, 766, tO, { size: 21, fill: COL.task, weight: 600 });
+    // Every row carries the properties that management and maintenance need.
+    show(put(b_caps(sheet, 'EIGENSCHAPPEN', 1452, 284, { fill: COL.task, anchor: 'end' }), { o: 0 }), tE);
+    S.inv.forEach((g, i) => g._bars.forEach((bar, k) => tw(bar, { c_fill: COL.dim }, tE + .2 + i * .12 + k * .06, .3)));
+    b_txt(S.notes, 'alles wat nodig is voor beheer en onderhoud', 1480, 776, tE + .4, { size: 20, fill: COL.dim, anchor: 'end' });
+  }],
+
+  ['ookin', 'Ook in de inventaris', (m) => {
+    // Same picture: three kinds of assets beside the organisation get a row of their own.
+    const p = S.panel, ot = S.own[3];
+    hide(S.notes, 0, .4);
+    tw(ot.ic._line, { c_stroke: COL.chalk }, .2, .4); tw(ot.lab, { c_fill: COL.chalk }, .2, .4);
+    b_txt(p, 'ook opgenomen in de inventaris', 330, 736, 1.2, { size: 21, fill: COL.dim });
+    C7_ALSO.forEach(([icon, y, lines, name, mark], k) => {
+      const i = 4 + k, t0 = m(mark), ry = c7_rowY(i);
+      // an empty place in the list first: three kinds are named separately
+      const slot = put(b_rect(S.sheet, 880, ry + 5, 580, 46, { stroke: COL.dim, rx: 5, 'stroke-dasharray': '6 6' }), { o: 0 });
+      show(slot, 1.2 + k * .25, .4); hide(slot, t0 + 1.3, .3);
+      const g = G(p, { o: 0 });
+      path(g, `M540 ${y}H${k === 2 ? 640 : 652}`, { stroke: COL.dim, 'stroke-width': 2.5 });
+      b_icon(g, icon, { x: 700, y, s: 1.05 });
+      if (k === 2) b_rect(g, 644, y - 42, 112, 84, { stroke: COL.dim, rx: 6, 'stroke-dasharray': '6 6' });   // not under the organisation's control
+      lines.forEach((str, n) => T(g, str, { x: 700, y: y + 64 + n * 23, size: 18, anchor: 'middle' }));
+      show(g, t0);
+      const row = c7_row(i, icon, name, true);
+      c7_fly(p, icon, 700, y, 1.05, i, t0 + .9); show(row, t0 + 1.5, .3);
+    });
+  }],
+
+  ['actueel', 'Volledig en actueel', (m) => {
+    const p = panel(0);
+    b_head(p, '5.09.01 · INVENTARIS VAN BEDRIJFSMIDDELEN');
+    b_kop(p, '5.09.01', 'volledig en actueel');
+    const tC = m('check'), tP = m('passend');
+    // The inventory, looked over from time to time.
+    show(b_icon(p, 'proc', { x: 230, y: 400, s: 2, o: 0 }), .3);
+    b_txt(p, 'inventaris', 230, 500, .4, { size: 25, weight: 600 });
+    show(b_icon(p, 'loep', { x: 352, y: 408, s: 1.3, o: 0, stroke: COL.task }), tC);
+    b_txt(p, 'periodiek gecontroleerd', 290, 566, tC + .3, { size: 25, weight: 600, fill: COL.task });
+    b_txt(p, 'op volledigheid en actualiteit', 290, 600, tC + .8, { size: 21, fill: COL.dim });
+    // How often depends on how often things change: two time lines, schematic.
+    b_txt(p, 'tussenpozen die passen bij hoe vaak er iets wijzigt', 600, 290, tP, { size: 24, weight: 600, fill: COL.task, anchor: 'start' });
+    const leg = G(p, { o: 0 });
+    path(leg, 'M606 687V713', { stroke: COL.dim, 'stroke-width': 3 });
+    T(leg, 'wijziging', { x: 624, y: 707, size: 20, fill: COL.dim });
+    mk('circle', { cx: 780, cy: 700, r: 9, fill: COL.task }, leg);
+    T(leg, 'controle van de inventaris', { x: 800, y: 707, size: 20, fill: COL.dim });
+    b_caps(leg, 'SCHEMATISCH', 1440, 706, { fill: COL.faint, anchor: 'end' });
+    show(leg, tP + .5);
+    const lane = (y, title, verdict, changes, checks, t0) => {
+      const g = G(p, { o: 0 });
+      T(g, title, { x: 600, y: y - 44, size: 24, weight: 600 });
+      path(g, `M600 ${y}H1440`, { stroke: COL.edge, 'stroke-width': 3 });
+      show(g, t0);
+      changes.forEach((q, k) => show(path(p, `M${600 + q * 840} ${y - 13}V${y + 13}`, { stroke: COL.dim, 'stroke-width': 3 }, { o: 0 }), t0 + .2 + k * .05, .25));
+      checks.forEach((q, k) => show(put(mk('circle', { cx: 600 + q * 840, cy: y, r: 9, fill: COL.task }, p), { o: 0 }), t0 + 1 + k * .15, .3));
+      b_txt(p, verdict, 1440, y - 44, t0 + 1, { size: 22, fill: COL.task, anchor: 'end' });
+    };
+    lane(400, 'veel wijzigingen', 'vaker controleren', Array.from({ length: 14 }, (_, k) => (k + .5) / 14), [1, 2, 3, 4, 5, 6, 7].map(k => k / 7), m('veel'));   // a check after every second change
+    lane(590, 'weinig wijzigingen', 'minder vaak', [.2, .55, .84], [.48, .96], m('weinig'));
+  }],
+
+  ['q1', 'Controlevraag', () => {
+    // Five assets as cards to point at.
+    const p = panel(0);
+    b_head(p, '5.09.01 · INVENTARIS VAN BEDRIJFSMIDDELEN');
+    b_txt(p, 'vijf bedrijfsmiddelen', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.cards = C7_Q1.map(([icon, lines], i) => {
+      const g = b_tile(p, { x: c7_q1X(i), y: 264, w: 268, h: 250, icon, lines, iconY: 84, iconS: 1.15, size: 20 });
+      b_rise(g, .3 + i * .1);
+      return g;
+    });
+  }, { ask: done => {
+    const items = S.cards.map((g, i) => ({ el: g, box: [c7_q1X(i), 264, 268, 250], label: C7_Q1[i][1].join(' ') }));
+    const ot = 'Operationele technologie is hier de besturing van een gemaal. Ook OT staat in de inventaris.';
+    quiz(WIDE, [{
+      id: 'c-inventaris-1', prompt: ['Welk bedrijfsmiddel is operationele technologie (OT)?'],
+      build: pickEls(items, 3, 'De besturing van een gemaal is operationele technologie. Ook OT staat in de inventaris.', i => [
+        'Een server is geen operationele technologie. ' + ot, 'Een laptop is geen operationele technologie. ' + ot,
+        'Een cloud-omgeving is geen operationele technologie. ' + ot, null, 'Een laptop is geen operationele technologie. ' + ot][i]),
+    }, {
+      id: 'c-inventaris-2', prompt: ['Welk bedrijfsmiddel is regelmatig verbonden, maar staat niet onder controle van de organisatie?'],
+      build: pickEls(items, 4, 'De laptop van de leverancier is regelmatig met het netwerk verbonden. Ook zonder controle erover staat hij in de inventaris.', i => [
+        'De eigen server staat onder controle van de organisatie. Verbonden zonder controle: de laptop van de leverancier.',
+        'Die laptop is van de organisatie; hij staat alleen op afstand. Verbonden zonder controle: de laptop van de leverancier.',
+        'Een cloud-omgeving noemt de maatregel apart. Regelmatig verbonden zonder controle: de laptop van de leverancier.',
+        'De besturing van een gemaal is van de organisatie zelf. Verbonden zonder controle: de laptop van de leverancier.', null][i]),
+    }, {
+      id: 'c-inventaris-3', prompt: ['Hoe vaak wordt de inventaris gecontroleerd op volledigheid en actualiteit?'],
+      // not a pointing question: clear the frames the pointing left on the cards first
+      build: (body, api) => (qlayer(), choice([['Eén keer per jaar.'], ['Passend bij hoe vaak er iets wijzigt.'], ['Alleen na een incident.']], 1,
+        'De controle is periodiek, met tussenpozen die passen bij hoe vaak er wijzigingen zijn.',
+        ['De BIO noemt hier geen vaste termijn: de tussenpozen passen bij hoe vaak er iets wijzigt.', null,
+          'De controle is periodiek, niet alleen na een incident: de tussenpozen passen bij hoe vaak er iets wijzigt.'])(body, api)),
+    }], done);
+  } }],
+
+  ['gedrag', 'Gedragsregels in het contract', (m) => {
+    const p = panel(0);
+    S.hd = b_head(p, '5.10.02 · GEDRAGSREGELS');
+    b_tab(1, .2);
+    S.kop = b_kop(p, '5.10.02', 'gedragsregels in het contract');
+    const tV = m('verpl'), tR = m('regels'), tW = m('wie'), tK = m('contract');
+    // Where these two measures come from: they were moved here from 5.04 (chapter 6).
+    const moved = G(p, { o: 0 });
+    b_caps(moved, 'VERPLAATST · ZIE HOOFDSTUK 6', 800, 352, { fill: COL.faint, anchor: 'middle' });
+    [['5.04.02', '5.10.02'], ['5.04.03', '5.10.03']].forEach(([a, b], k) => {
+      const y = 380 + k * 80;
+      put(b_chip(moved, 510, y, 180, a, { hgt: 50, size: 22, fill: COL.dim }), { o: 1 });
+      path(moved, `M712 ${y + 25}H888 M874 ${y + 15}L888 ${y + 25}L874 ${y + 35}`, { stroke: COL.dim, 'stroke-width': 3 });
+      put(b_chip(moved, 910, y, 180, b, { hgt: 50, size: 22, col: COL.task, fill: COL.task }), { o: 1 });
+    });
+    show(moved, tV); hide(moved, tR - .5, .4);
+    // The rules of conduct.
+    const rules = G(p, { o: 0 });
+    b_icon(rules, 'doc', { x: 300, y: 400, s: 2.6 });
+    T(rules, 'gedragsregels', { x: 300, y: 516, size: 27, weight: 600, anchor: 'middle' });
+    T(rules, 'voor het gebruik van', { x: 300, y: 550, size: 21, fill: COL.dim, anchor: 'middle' });
+    T(rules, 'bedrijfsmiddelen', { x: 300, y: 577, size: 21, fill: COL.dim, anchor: 'middle' });
+    show(rules, tR);
+    // For external staff and volunteers they are part of the contract: the rules slide into it.
+    const rest = S.rest = G(p);
+    [['extern personeel', 350], ['vrijwilligers', 560]].forEach(([str, y], k) => {
+      const g = G(rest, { o: 0 });
+      b_icon(g, 'persoon', { x: 1320, y, s: 1.4 });
+      T(g, str, { x: 1320, y: y + 82, size: 23, weight: 600, anchor: 'middle' });
+      show(g, tW + k * .9);
+    });
+    const doc = G(rest, { o: 0, y: 14 });
+    b_rect(doc, 700, 262, 380, 440, { fill: COL.panel });
+    b_caps(doc, 'CONTRACT', 730, 304, { size: 16 });
+    [320, 230].forEach((w, k) => mk('rect', { x: 730, y: 330 + k * 24, width: w, height: 10, rx: 3, fill: COL.edge }, doc));
+    [320, 280, 180].forEach((w, k) => mk('rect', { x: 730, y: 544 + k * 24, width: w, height: 10, rx: 3, fill: COL.edge }, doc));
+    path(doc, 'M730 664H900', { stroke: COL.dim, 'stroke-width': 2 });
+    b_rise(doc, tK);
+    show(path(rest, 'M1092 440L1254 378 M1092 520L1254 556', { stroke: COL.dim, 'stroke-width': 3 }, { o: 0 }), tK + .4);
+    const clause = G(rest, { o: 0, x: -430, y: -20 });
+    b_rect(clause, 724, 392, 332, 116, { fill: COL.board, stroke: COL.task, sw: 3, rx: 6 });
+    b_icon(clause, 'doc', { x: 772, y: 450, s: 1.1, stroke: COL.task });
+    T(clause, 'gedragsregels', { x: 812, y: 458, size: 24, fill: COL.task, weight: 600 });
+    show(clause, tK + .5, .3); tw(clause, { x: 0, y: 0 }, tK + .7, .9, io);
+    b_txt(rest, 'volgens de huisregels of de interne gedragsregels', 890, 748, m('huis'), { size: 23, fill: COL.dim });
+  }],
+
+  ['gewezen', 'Alle medewerkers', (m) => {
+    // Same picture: the rules stay; the contract makes way for all employees.
+    const p = S.panel, tA = m('allen'), tT = m('aantoon'), xs = [640, 770, 900, 1030, 1160, 1290];
+    hide(S.rest, 0, .4); hide(S.kop, 0, .3); hide(S.hd, 0, .3);
+    b_head(p, '5.10.03 · GEDRAGSREGELS', .3);
+    b_kop(p, '5.10.03', 'alle medewerkers gewezen op de regels', .3);
+    xs.forEach((x, i) => show(b_icon(p, 'persoon', { x, y: 350, s: 1.25, o: 0 }), .5 + i * .08));
+    b_txt(p, 'alle medewerkers', 965, 436, .7, { size: 24, weight: 600 });
+    b_arrow(p, 420, 572, 350, tA);
+    xs.forEach((x, i) => { const g = G(p, { o: 0 }); b_tick(g, x, 478); show(g, tA + .5 + i * .12); });
+    b_txt(p, 'gewezen op de gedragsregels', 965, 528, tA + .9, { size: 22, fill: COL.dim });
+    // Demonstrably: the organisation can show that it happened.
+    b_down(p, 965, 548, 592, tT, COL.task);
+    show(b_box(p, 765, 604, 400, ['aantoonbaar'], { col: COL.task, fill: COL.task }), tT + .2);
+    b_txt(p, 'de organisatie kan laten zien dat het is gebeurd', 965, 712, tT + 1.4, { size: 23, fill: COL.dim });
+  }],
+
+  ['classificeren', 'Classificeren', (m) => {
+    const p = panel(0);
+    b_head(p, '5.12.01 · INFORMATIE CLASSIFICEREN');
+    b_tab(3, .2);
+    b_kop(p, '5.12.01', 'informatie classificeren');
+    const tA = m('alle'), tR = m('ra'), tM = m('methode'), tO = m('onderdeel');
+    // Three information systems, schematic; the information in each is classified through a risk assessment.
+    [290, 380, 470].forEach((y, k) => {
+      const g = G(p, { o: 0 }), yg = 380 + (k - 1) * 34;
+      b_icon(g, 'db', { x: 180, y, s: .9 });
+      T(g, 'informatiesysteem ' + 'ABC'[k], { x: 230, y: y + 8, size: 22 });
+      show(g, tA + k * .2);
+      show(b_dart(p, 480, y, 606, yg), tR + .3);
+      show(b_dart(p, 994, yg, 1118, y), tR + 1.1 + k * .2);
+      const tag = G(p, { o: 0 });
+      b_rect(tag, 1132, y - 30, 330, 60, { fill: COL.panel, stroke: COL.task, rx: 6 });
+      b_tick(tag, 1166, y, COL.task);
+      T(tag, 'geclassificeerd', { x: 1196, y: y + 8, size: 22, fill: COL.task, weight: 600 });
+      show(tag, tR + 1.3 + k * .2);
+    });
+    b_txt(p, 'SCHEMATISCH', 150, 540, tA + .6, { size: 15, fill: COL.faint, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    const gate = G(p, { o: 0, y: 14 });
+    b_rect(gate, 620, 280, 360, 200, { fill: COL.panel, stroke: COL.task, sw: 3 });
+    b_matrix(gate, 800, 348, 1.2);
+    T(gate, 'expliciete risicoafweging', { x: 800, y: 440, size: 26, weight: 600, fill: COL.task, anchor: 'middle' });
+    b_rise(gate, tR);
+    // The method it uses, and what that method is part of.
+    b_down(p, 800, 490, 618, tM);
+    show(b_box(p, 500, 630, 600, ['vastgestelde methodiek voor impactclassificatie'], { col: COL.task, hgt: 66, size: 22 }), tM + .3);
+    const outer = G(p, { o: 0 });
+    b_rect(outer, 300, 566, 1000, 204, { stroke: COL.dim, rx: 8 });
+    b_caps(outer, 'ZIE HOOFDSTUK 3 · RISICOMANAGEMENT', 328, 600, { fill: COL.faint, size: 14 });
+    T(outer, 'onderdeel van de vastgestelde risicomanagementmethodiek', { x: 800, y: 742, size: 23, weight: 600, anchor: 'middle' });
+    show(outer, tO);
+  }],
+
+  ['standaarden', 'Verplichte standaarden', (m) => {
+    const p = panel(0);
+    b_head(p, '5.14.01 · BEVEILIGINGSSTANDAARDEN');
+    b_tab(5, .2);
+    b_kop(p, '5.14.01', 'verplichte beveiligingsstandaarden');
+    const tV = m('vijf'), tS = m('sys'), tM = m('mail'), tD = m('std'), tW = m('waar');
+    show(b_icon(p, 'wereld', { x: 240, y: 450, s: 1.9, o: 0 }), .4);
+    b_txt(p, 'internet', 240, 550, .5, { size: 25, weight: 600 });
+    // Five measures belong to this control; this is the first.
+    const five = G(p);
+    b_txt(five, 'vijf overheidsmaatregelen bij het overdragen van informatie', 985, 398, tV, { size: 23, fill: COL.dim });
+    ['5.14.01', '5.14.02', '5.14.03', '5.14.04', '5.14.05'].forEach((nr, k) =>
+      show(b_chip(five, 520 + k * 190, 428, 170, nr, { col: k ? COL.dim : COL.task, fill: k ? COL.dim : COL.task, hgt: 50, size: 22 }), tV + .2 + k * .12));
+    hide(five, tS - .5, .4);
+    // What faces the internet: systems that can be reached from it, and e-mail.
+    const sys = b_tile(p, { x: 470, y: 250, w: 400, h: 206, icon: 'server', lines: ['informatiesystemen', 'bereikbaar vanaf internet'], iconS: 1, iconY: 58, size: 21 });
+    b_term(sys, 'internet-facing', 'internet-facing', { x: 670, y: 437, size: 19, anchor: 'middle', fill: COL.dim, o: 1 });
+    b_rise(sys, tS);
+    draw(path(p, 'M306 428C380 428 390 353 458 353', { stroke: COL.dim, 'stroke-width': 3 }, { d: 0 }), tS, .6);
+    b_rise(b_tile(p, { x: 470, y: 484, w: 400, h: 206, icon: 'mail', lines: ['e-mailverkeer'], iconS: 1.1, iconY: 76, size: 21 }), tM);
+    draw(path(p, 'M306 472C380 472 390 587 458 587', { stroke: COL.dim, 'stroke-width': 3 }, { d: 0 }), tM, .6);
+    // Both keep meeting the mandatory security standards; where those are listed.
+    show(b_dart(p, 882, 353, 968, 432), tD); show(b_dart(p, 882, 587, 968, 508), tD);
+    show(b_box(p, 980, 410, 500, ['blijven voldoen aan de verplichte', 'beveiligingsstandaarden'], { col: COL.task, fill: COL.task, hgt: 120, size: 24 }), tD + .2);
+    b_kick(p, 'WELKE DAT ZIJN', 980, COL.dim, tW, 582);
+    show(b_chip(p, 980, 596, 500, 'website Forum Standaardisatie', { hgt: 44, size: 18 }), tW + .3);
+    show(b_chip(p, 980, 650, 500, 'Cyberbeveiligingsbesluit', { hgt: 44, size: 18 }), tW + 3);
+  }, { hold: true }],   // the lesson waits here: the English term can be heard before it goes on
+
+  ['meten', 'Sturen met metingen', (m) => {
+    const p = panel(0);
+    b_head(p, '5.14.01 · BEVEILIGINGSSTANDAARDEN');
+    b_kop(p, '5.14.01', 'sturen met metingen');
+    const tM = m('meting'), tI = m('inst'), tO = m('opt'), tF = m('func');
+    // A measurement, schematic: every part either passes or is still open; the open ones are set right.
+    const sheet = G(p, { o: 0, y: 14 });
+    b_rect(sheet, 150, 244, 560, 470, { fill: COL.panel });
+    b_caps(sheet, 'METING · INTERNET.NL', 178, 284, { size: 16 });
+    b_caps(sheet, 'SCHEMATISCH', 682, 284, { fill: COL.faint, anchor: 'end' });
+    path(sheet, 'M178 300H682', { stroke: COL.edge, 'stroke-width': 2 });
+    [...'ABCDE'].forEach((c, i) => {
+      const y = 318 + i * 76;
+      T(sheet, 'onderdeel ' + c, { x: 206, y: y + 44, size: 22 });
+      if (i < 4) path(sheet, `M178 ${y + 74}H682`, { stroke: COL.edge, 'stroke-width': 1.5 });
+      const tick = G(p, { o: 0 }), open = i === 1 || i === 4;
+      b_tick(tick, 652, y + 36);
+      if (open) {
+        const dash = path(p, `M640 ${y + 36}H666`, { stroke: COL.task, 'stroke-width': 4 }, { o: 0 });
+        show(dash, tM + .9 + i * .12, .3); hide(dash, tI + .5, .3);
+      }
+      show(tick, open ? tI + .8 : tM + .9 + i * .12, .3);
+    });
+    b_rise(sheet, tM);
+    b_arrow(p, 726, 862, 480, tI);
+    b_txt(p, 'alle onderdelen zo ingesteld dat', 1150, 346, tI + .2, { size: 24, fill: COL.dim });
+    show(b_box(p, 880, 372, 540, ['de beveiliging optimaal is'], { col: COL.task, fill: COL.task, hgt: 84, size: 26 }), tO);
+    b_txt(p, 'zonder afbreuk aan', 1150, 514, tF, { size: 24, fill: COL.dim });
+    show(b_box(p, 880, 540, 540, ['de functionaliteit van de geboden dienst'], { hgt: 84, size: 24 }), tF + .3);
+  }],
+
+  ['certificaten', 'Certificaten', (m) => {
+    const p = panel(0);
+    b_head(p, '5.14.02 · CERTIFICATEN');
+    b_kop(p, '5.14.02', 'certificaten bij webverkeer');
+    const tA = m('open'), tV = m('ov'), tI = m('intern'), tF = m('of');
+    b_kick(p, 'WEBVERKEER MET GEVOELIGE GEGEVENS', 150, COL.dim, .5, 262);
+    // Two lanes: who talks to the server, and the least a certificate has to be.
+    const lane = (y, title, icon, t0) => {
+      const g = G(p, { o: 0 });
+      T(g, title, { x: 150, y: y - 52, size: 24, weight: 600 });
+      b_icon(g, icon, { x: 200, y: y + 6, s: 1 });
+      b_icon(g, 'server', { x: 470, y: y + 6, s: .9 });
+      show(g, t0);
+      b_arrow(p, 256, 418, y + 6, t0 + .3, { both: true });
+    };
+    lane(372, 'openbaar webverkeer', 'wereld', tA);
+    S.least = [b_txt(p, 'ten minste', 546, 386, tA + 2.3, { size: 21, fill: COL.dim, anchor: 'start' })];
+    show(c7_cert(p, 666, 340, 400, 'OV-certificaat', 'publiek vertrouwd'), tA + 2.6);
+    const ov = G(p, { o: 0 });
+    T(ov, 'OV:', { x: 1096, y: 386, size: 21, fill: COL.dim });
+    b_term(ov, 'Organization Validated', 'organization-validated', { x: 1140, y: 386, size: 21, o: 1 });
+    show(ov, tV);
+    lane(562, 'intern webverkeer', 'laptop', tI);
+    S.least.push(b_txt(p, 'ten minste', 546, 576, tI + .6, { size: 21, fill: COL.dim, anchor: 'start' }));
+    show(c7_cert(p, 666, 530, 400, 'OV-certificaat', 'publiek vertrouwd'), tI + .8);
+    b_txt(p, 'of', 1096, 576, tF, { size: 22, fill: COL.dim });
+    show(c7_cert(p, 1126, 530, 354, 'PKIo-certificaat', 'privaat'), tF + .2);
+  }],
+
+  ['hoger', 'Hogere eisen', (m) => {
+    // Same picture: "at least" is a floor; where higher requirements come from.
+    const p = S.panel, tH = m('hoger');
+    S.least.forEach(e => tw(e, { c_fill: COL.task }, .2, .4));
+    b_txt(p, 'hogere eisen volgen uit', 150, 720, tH, { size: 24, weight: 600, fill: COL.task, anchor: 'start' });
+    [['ra', 470, 260, 'een risicoanalyse'], ['aansluit', 750, 300, 'aansluitvoorwaarden'], ['wet', 1070, 200, 'wetgeving']].forEach(([mark, x, w, str]) =>
+      show(b_box(p, x, 682, w, [str], { hgt: 60, size: 22 }), m(mark)));
+  }, { hold: true }],   // the English term of this picture can be heard before the lesson goes on
+
+  ['handtekening', 'Elektronische handtekeningen', (m) => {
+    const p = panel(0);
+    b_head(p, '5.14.03 · ELEKTRONISCHE HANDTEKENINGEN');
+    b_kop(p, '5.14.03', 'elektronische handtekeningen');
+    const tS = m('soort'), tD = m('std'), tL = m('lijst');
+    // A document that gets signed.
+    const doc = G(p, { o: 0, y: 14 });
+    b_rect(doc, 150, 250, 340, 440, { fill: COL.panel });
+    [272, 250, 272, 190].forEach((w, k) => mk('rect', { x: 184, y: 296 + k * 28, width: w, height: 10, rx: 3, fill: COL.edge }, doc));
+    [272, 220].forEach((w, k) => mk('rect', { x: 184, y: 440 + k * 28, width: w, height: 10, rx: 3, fill: COL.edge }, doc));
+    path(doc, 'M184 632H456', { stroke: COL.dim, 'stroke-width': 2 });
+    b_caps(doc, 'ELEKTRONISCH ONDERTEKEND', 184, 662, { fill: COL.faint, size: 13 });
+    b_rise(doc, .3);
+    draw(path(p, 'M204 616C222 566 240 560 246 604C250 628 268 572 284 586C298 598 300 620 318 604C334 590 350 586 366 606C378 620 398 604 430 596', { stroke: COL.chalk, 'stroke-width': 3 }, { d: 0 }), 1.1, 1.4);
+    // Two kinds of signature, one standard.
+    show(b_box(p, 570, 330, 300, ['geavanceerd']), tS);
+    b_txt(p, 'EN / OF', 720, 432, tS + .5, { size: 16, fill: COL.dim, weight: 700, font: MONO }).setAttribute('letter-spacing', '2');
+    show(b_box(p, 570, 456, 300, ['gekwalificeerd']), tS + .9);
+    b_arrow(p, 884, 1006, 425, tD);
+    b_txt(p, 'voldoen aan', 945, 404, tD + .2, { size: 20, fill: COL.dim });
+    const std = G(p, { o: 0, y: 14 });
+    b_rect(std, 1020, 320, 460, 210, { fill: '#172028', stroke: COL.iso });
+    b_caps(std, 'STANDAARD', 1048, 362, { fill: COL.iso, size: 16 });
+    b_term(std, 'Advanced Electronic Signatures', 'advanced-electronic-signatures', { x: 1048, y: 420, size: 23, o: 1 });
+    T(std, 'AdES Baseline Profiles', { x: 1048, y: 476, size: 20, fill: COL.iso, font: MONO });
+    b_rise(std, tD + .2);
+    b_down(p, 1250, 542, 596, tL);
+    show(b_box(p, 1020, 608, 460, ['Lijst open standaarden', 'Forum Standaardisatie'], { hgt: 96, size: 22, weight: 500 }), tL + .3);
+  }, { hold: true }],   // the lesson waits here: the English term can be heard before it goes on
+
+  ['registratie', 'Actuele registratie', (m) => {
+    const p = panel(0);
+    b_head(p, '5.14.04 · ACTUELE REGISTRATIE');
+    b_kop(p, '5.14.04', 'een actuele registratie');
+    const tR = m('reg');
+    // Four kinds of things that face the internet; each appears on its word.
+    C7_REG.forEach(([icon, lines, sub], i) => {
+      const x = 120 + i * 346, g = b_tile(p, { x, y: 244, w: 320, h: 196, icon, lines, iconY: 66, iconS: 1.05, size: 21 });
+      if (sub) T(g, sub, { x: x + 160, y: 412, size: 17, fill: COL.dim, anchor: 'middle' });
+      b_rise(g, m('t' + (i + 1)));
+      b_down(p, x + 160, 452, 498, tR + i * .1);
+    });
+    // All of them are in one registration, kept up to date. Schematic.
+    const reg = G(p, { o: 0, y: 14 });
+    b_rect(reg, 120, 510, 1358, 220, { fill: COL.panel, stroke: COL.task, sw: 3 });
+    b_caps(reg, 'ACTUELE REGISTRATIE', 152, 552, { fill: COL.task, size: 17 });
+    b_caps(reg, 'SCHEMATISCH', 1446, 552, { fill: COL.faint, anchor: 'end' });
+    path(reg, 'M152 568H1446', { stroke: COL.edge, 'stroke-width': 2 });
+    b_rise(reg, tR + .3);
+    C7_REG.forEach((c, i) => {
+      const x = 156 + i * 346, g = G(p, { o: 0 });
+      b_tick(g, x + 10, 632);
+      [[0, 210], [26, 150], [52, 180]].forEach(([dy, w]) => mk('rect', { x: x + 40, y: 606 + dy, width: w, height: 12, rx: 3, fill: COL.edge }, g));
+      show(g, tR + 1 + i * .2);
+    });
+  }],
+
+  ['rio', 'Het register', (m) => {
+    const p = panel(0);
+    b_head(p, '5.14.05 · REGISTER INTERNETDOMEINEN OVERHEID');
+    b_kop(p, '5.14.05', 'publieke websites in het register');
+    const tW = m('web'), tR = m('rio'), tZ = m('zes'), cx = 1270, cy = 460, R = 120;
+    // Public websites, schematic, are made known through the register.
+    ['A', 'B'].forEach((c, k) => {
+      b_rise(b_tile(p, { x: 120, y: 262 + k * 200, w: 300, h: 170, icon: 'code', lines: ['publieke website ' + c], iconY: 64, iconS: 1 }), tW + k * .2);
+      show(b_dart(p, 432, 347 + k * 200, 566, 430 + k * 60), tR);
+    });
+    b_txt(p, 'SCHEMATISCH', 120, 664, tW + .4, { size: 15, fill: COL.faint, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    const reg = G(p, { o: 0, y: 14 });
+    b_rect(reg, 580, 340, 400, 240, { fill: COL.panel, stroke: COL.task, sw: 3 });
+    T(reg, 'RIO', { x: 780, y: 432, size: 54, fill: COL.task, weight: 700, font: MONO, anchor: 'middle' });
+    T(reg, 'Register Internetdomeinen', { x: 780, y: 490, size: 23, weight: 600, anchor: 'middle' });
+    T(reg, 'Overheid', { x: 780, y: 520, size: 23, weight: 600, anchor: 'middle' });
+    b_rise(reg, tR);
+    // A year as a ring: the marker goes round once and the information is updated twice.
+    b_arrow(p, 994, cx - R - 36, cy, tZ);
+    show(b_year(p, cx, cy, R), tZ);
+    const hand = G(p, { x: cx, y: cy, o: 0 });
+    mk('circle', { cx: 0, cy: -R, r: 11, fill: COL.task }, hand);
+    show(hand, tZ + .2, .3); tw(hand, { r: 360 }, tZ + .4, 2.6, io);
+    const chip = { col: COL.task, fill: COL.task, hgt: 38, size: 17, bg: COL.board };
+    show(b_chip(p, cx - 100, cy + R + 22, 200, 'geactualiseerd', chip), tZ + 1.7);
+    show(b_chip(p, cx - 100, cy - R - 60, 200, 'geactualiseerd', chip), tZ + 3);
+    b_txt(p, 'ten minste iedere zes maanden', cx, 706, tZ + .6, { size: 23, weight: 600, fill: COL.task });
+  }],
+
+  ['q2', 'Controlevraag', () => {
+    // The four controls of this chapter that have government measures, as cards to point at.
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 5.09 TOT EN MET 5.14');
+    b_tab(-1, .2);
+    b_txt(p, 'de vier beheersmaatregelen met overheidsmaatregelen', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.cards = C7_Q2.map(([nr, icon, lines], i) => {
+      const x = c7_q2X(i), g = b_tile(p, { x, y: 264, w: 300, h: 250, icon, lines, iconY: 112, iconS: 1.05, size: 21, textY: 448 });
+      if (!icon) b_matrix(g, x + 150, 376, 1.15);
+      T(g, nr, { x: x + 150, y: 312, size: 26, fill: COL.task, weight: 700, anchor: 'middle', font: MONO });
+      b_rise(g, .3 + i * .1);
+      return g;
+    });
+  }, { ask: done => {
+    const items = S.cards.map((g, i) => ({ el: g, box: [c7_q2X(i), 264, 300, 250], label: C7_Q2[i][0] + ' ' + C7_Q2[i][2].join(' ') }));
+    quiz(WIDE, [{
+      id: 'c-situatie-1', prompt: ['Een vrijwillige dijkwacht krijgt een tablet. Waar staat dat de gedragsregels in het contract horen?'],
+      build: pickEls(items, 1, '5.10.02: voor extern personeel en vrijwilligers staan de gedragsregels in het contract.', i => [
+        'De inventaris legt vast dat de tablet er is. De gedragsregels voor vrijwilligers staan in 5.10.02.', null,
+        'Classificeren gaat over informatie in systemen. De gedragsregels voor vrijwilligers staan in 5.10.02.',
+        'Dat gaat over het overdragen van informatie. De gedragsregels voor vrijwilligers staan in 5.10.02.'][i]),
+    }, {
+      id: 'c-situatie-2', prompt: ['De informatie in een nieuw zaaksysteem krijgt een klasse. Welke maatregel vraagt daarbij een risicoafweging?'],
+      build: pickEls(items, 2, '5.12.01: informatie in alle informatiesystemen wordt geclassificeerd met een expliciete risicoafweging.', i => [
+        'De inventaris legt vast welke bedrijfsmiddelen er zijn. Het classificeren van informatie staat in 5.12.01.',
+        'Gedragsregels gaan over het gebruik van bedrijfsmiddelen. Het classificeren van informatie staat in 5.12.01.', null,
+        'Dat gaat over het overdragen van informatie. Het classificeren van informatie staat in 5.12.01.'][i]),
+    }, {
+      id: 'c-situatie-3', prompt: ['Het waterschap opent een nieuwe publieke website. Waar staat het register daarvoor?'],
+      build: pickEls(items, 3, '5.14.05: publiek toegankelijke websites worden bekendgemaakt via het Register Internetdomeinen Overheid.', i => [
+        'De inventaris is het eigen overzicht van bedrijfsmiddelen. Het register voor publieke websites staat in 5.14.05.',
+        'Gedragsregels gaan over het gebruik van bedrijfsmiddelen. Het register voor publieke websites staat in 5.14.05.',
+        'Classificeren gaat over informatie in systemen. Het register voor publieke websites staat in 5.14.05.', null][i]),
+    }], done);
+  } }],
+
+  ['wrap', 'Samenvatting', (m) => {
+    const p = panel(0);
+    b_head(p, 'SAMENVATTING');
+    hide(S.tabsG, 0, .4);
+    b_wrap(p, [
+      ['Weet wat je hebt: de inventaris.', 'Ook OT, cloud, wat op afstand staat en wat verbonden is zonder eigen controle. Periodiek gecontroleerd.', 'w1'],
+      ['Gedragsregels voor het gebruik van bedrijfsmiddelen.', 'In het contract van extern personeel en vrijwilligers; alle medewerkers zijn er aantoonbaar op gewezen.', 'w2'],
+      ['Informatie wordt geclassificeerd.', 'Met een expliciete risicoafweging en een vastgestelde methodiek.', 'w3'],
+      ['Overdragen: standaarden, certificaten, registratie.', 'Sturen met de metingen van internet.nl. Publieke websites staan in het register (RIO).', 'w4'],
+    ], m);
+  }],
+
+  ['final1', 'Oefenronde 1', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-stellingen', prompt: ['Klopt het, of klopt het niet?'],
+    build: grid([
+      { parts: ['Operationele technologie (OT) hoort in de inventaris van bedrijfsmiddelen.'], ans: ['k'], why: 'De inventaris omvat de bedrijfsmiddelen voor informatieverwerking, met inbegrip van OT.' },
+      { parts: ['Een publieke website wordt één keer gemeld in het register; daarna hoeft er niets meer.'], ans: ['n'], why: 'De informatie in het Register Internetdomeinen Overheid wordt ten minste iedere zes maanden geactualiseerd.' },
+      { parts: ['Een cloud-omgeving staat bij een leverancier en hoeft daarom niet in de inventaris.'], ans: ['n'], why: 'Cloud-omgevingen noemt de maatregel juist apart: ze zijn in de inventaris opgenomen.' },
+      { parts: ['Voor vrijwilligers staan de gedragsregels in het contract.'], ans: ['k'], why: 'Net als voor extern personeel. Alle medewerkers zijn aantoonbaar op de regels gewezen.' },
+      { parts: ['Informatie classificeren kan op gevoel; een methodiek is niet nodig.'], ans: ['n'], why: 'Classificeren gebeurt met een expliciete risicoafweging, volgens een vastgestelde methodiek.' },
+    ], KN, { multi: false, text: true }),
+  }], done, 'Oefenronde 1 van 2') }],
+
+  ['final2', 'Oefenronde 2', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-contract', prompt: ['Voor wie liggen de gedragsregels vast in het contract?'],
+    build: choice([['Alleen voor medewerkers in vaste dienst.'], ['Voor extern personeel en vrijwilligers.'], ['Voor niemand; een mondelinge uitleg volstaat.']], 1,
+      'Voor extern personeel en vrijwilligers staan de gedragsregels in het contract, volgens de huisregels of interne gedragsregels.',
+      ['De maatregel noemt extern personeel en vrijwilligers: voor hen staan de regels in het contract.', null,
+        'De regels liggen vast: voor extern personeel en vrijwilligers in het contract.']),
+  }, {
+    id: 'p-certificaat', prompt: ['Welk certificaat is ten minste nodig bij openbaar webverkeer van gevoelige gegevens?'],
+    build: choice([['Een publiek vertrouwd OV-certificaat.'], ['Een privaat PKIo-certificaat.'], ['Dat bepaalt de organisatie zelf.']], 0,
+      'Ten minste een publiek vertrouwd OV-certificaat. Hogere eisen volgen uit een risicoanalyse, aansluitvoorwaarden of wetgeving.',
+      [null, 'Een privaat PKIo-certificaat kan bij intern webverkeer. Bij openbaar webverkeer is ten minste een publiek vertrouwd OV-certificaat nodig.',
+        'De BIO noemt een minimum: ten minste een publiek vertrouwd OV-certificaat.']),
+  }, {
+    id: 'p-meten', prompt: ['Waarmee stuurt de organisatie op de verplichte beveiligingsstandaarden?'],
+    build: choice([['Met het Register Internetdomeinen Overheid.'], ['Met een jaarlijkse verklaring van de leverancier.'], ['Met de metingen van internet.nl.']], 2,
+      'De organisatie stuurt met de metingen van internet.nl, voor systemen die vanaf internet bereikbaar zijn en voor e-mailverkeer.',
+      ['In dat register worden publieke websites bekendgemaakt. Sturen op de standaarden gebeurt met de metingen van internet.nl.',
+        'Zo’n verklaring noemt de BIO hier niet. Sturen gebeurt met de metingen van internet.nl.', null]),
+  }], done, 'Oefenronde 2 van 2 · vraag') }],
+
+  ['finish', 'Afgerond', () => { panel(0); }, { ask: finishCard }],
+].map(([id, title, run, extra]) => ({ id, title, run, ...extra }));
+
+boot();
+</script>
+</body>
+</html>

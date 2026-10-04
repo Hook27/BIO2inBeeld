@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toegang · BIO2 in beeld</title>
+<link rel="stylesheet" href="../lib/engine.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2314171a'/%3E%3Cpath d='M15 52V38M27 52V20M39 52V32M51 52V14' stroke='%238d959d' stroke-width='7'/%3E%3Cpath d='M7 28H57' stroke='%23c9a45c' stroke-width='4'/%3E%3C/svg%3E">
+<link rel="expect" href="#bar" blocking="render"><!-- hold the first frame until the player exists, so the page transition can run -->
+</head>
+<body>
+<script src="../lib/engine.js"></script>
+<script src="audio/nl/timings.js"></script>
+<script>
+'use strict';
+// Hoofdstuk 8: de overheidsmaatregelen 5.15.01 tot en met 5.18.02 van de BIO2 (pagina 16 en 17): de vertrouwde zone,
+// identiteiten van gebruikers, multi-factorauthenticatie en wachtwoorden, en toegangsrechten.
+// Beat ids match content/bio2/ch08/narration.nl.json. One idea per beat.
+const CHAPTER = { number: 8, title: 'Toegang: accounts, MFA en rechten', minutes: 7, language: 'nl', next: '../ch09/' };
+
+/* ---------- chapter data (used by the helpers and inside BEATS, so defined first) ---------- */
+const C8_TABS = ['5.15', '5.16', '5.17', '5.18'];
+// Four controls of ISO 27002 with their government measures in the BIO2; this time every one of them has some.
+const C8_CTRL = [
+  { code: '5.15', topic: ['toegangsbeveiliging'], nrs: ['5.15.01'] },
+  { code: '5.16', topic: ['identiteitsbeheer'], nrs: ['5.16.01', '5.16.02'] },
+  { code: '5.17', topic: ['authenticatie-', 'informatie'], nrs: ['5.17.01', '5.17.02', '5.17.03'] },
+  { code: '5.18', topic: ['toegangsrechten'], nrs: ['5.18.01', '5.18.02'] },
+];
+// Where multi-factor authentication applies at least (5.17.01): [icon, label].
+const C8_WAAR = [
+  ['laptop', ['primair aanloggen op de', 'digitale werkomgeving']],
+  ['wereld', ['accounts voor voorzieningen', 'bereikbaar via internet']],
+  ['sleutel', ['accounts met', 'beheerrechten']],
+];
+// Three roles as cards for the first quick check: [icon, label].
+const C8_Q1 = [['overheid', ['het bestuur']], ['persoon', ['de proceseigenaar']], ['schild', ['de CISO']]];
+const c8_q1X = i => 220 + i * 400;
+// The four controls as cards for the second quick check: [number, icon, label].
+const C8_Q2 = [['5.15', 'schild', ['vertrouwde', 'zone']], ['5.16', 'persoon', ['identiteiten']], ['5.17', 'sleutel', ['authenticatie']], ['5.18', 'proc', ['toegangsrechten']]];
+const c8_q2X = i => 146 + i * 336;
+// The icons 'sleutel', 'kluis' and 'telefoon' started here and moved to the engine when chapters 12 and 13 needed them.
+
+/* ---------- chapter drawing helpers (prefixed c8_; the shared b_ helpers live in ../lib/engine.js) ---------- */
+// A copy of an icon travels from one place to another and fades as it arrives.
+const c8_fly = (p, icon, [x0, y0, s0], [x1, y1, s1], t0) => {
+  const g = b_icon(p, icon, { x: x0, y: y0, s: s0, o: 0 });
+  show(g, t0, .15); tw(g, { x: x1, y: y1, s: s1 }, t0 + .1, .8, io); hide(g, t0 + .8, .25);
+};
+// A factor of authentication as a card of 96 high: an optional icon, a name and an optional small line in monospace
+// (sub: true only keeps room for a second line). Returns the group, hidden.
+const c8_factor = (p, x, y, w, icon, main, sub) => {
+  const g = G(p, { o: 0 }), tx = x + (icon ? 96 : 28);
+  b_rect(g, x, y, w, 96, { fill: COL.panel, rx: 6 });
+  if (icon) b_icon(g, icon, { x: x + 48, y: y + 48, s: .8 });
+  T(g, main, { x: tx, y: y + (sub ? 44 : 57), size: 23, weight: 600 });
+  if (typeof sub === 'string') T(g, sub, { x: tx, y: y + 74, size: 17, fill: COL.dim, font: MONO });
+  return g;
+};
+// (b_num, b_role and b_stamp, which started in this chapter, live in ../lib/engine.js.)
+
+/* ---------- beats: [id, title, run(m, D), { ask, hold }?] ---------- */
+const BEATS = [
+  ['intro', 'Toegang', (m, D) =>
+    b_title(m, D, 'DEEL B · MAATREGELEN VOOR DE ORGANISATIE · HOOFDSTUK 8', 'Toegang', 'Vertrouwde zones, identiteiten, inloggen en toegangsrechten.')],
+
+  ['vier', '5.15 tot en met 5.18', (m) => {
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 5.15 TOT EN MET 5.18');
+    // The strip of this chapter: the four controls. All of them have government measures, so no dashed frames.
+    b_tabs(C8_TABS, .4);
+    const tA = m('alle');
+    C8_CTRL.forEach((c, i) => {
+      const x = 120 + i * 346, y = 236, g = G(p, { o: 0, y: 12 });
+      b_rect(g, x, y, 320, 330, { fill: COL.panel });
+      T(g, c.code, { x: x + 24, y: y + 52, size: 34, fill: COL.iso, weight: 700, font: MONO });
+      c.topic.forEach((str, k) => T(g, str, { x: x + 24, y: y + 92 + k * 28, size: 21 }));
+      tw(g, { o: 1, y: 0 }, .3 + i * .1, .5, out);
+      c.nrs.forEach((nr, k) => show(b_chip(g, x + 24, y + 156 + k * 52, 150, nr, { col: COL.task, fill: COL.task, hgt: 42, size: 19 }), tA + .2 + i * .25 + k * .1));
+    });
+    b_txt(p, 'BRON ONDERWERPEN: NEN-EN-ISO/IEC 27002:2022', 120, 606, 1.6, { size: 14, fill: COL.faint, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    b_txt(p, 'samen acht overheidsmaatregelen', 800, 688, m('acht'), { size: 27, weight: 600, fill: COL.task });
+  }],
+
+  ['zone', 'De vertrouwde zone', (m) => {
+    const p = panel(0);
+    b_head(p, '5.15.01 · TOEGANG TOT EEN VERTROUWDE ZONE');
+    b_tab(0, .2);
+    b_kop(p, '5.15.01', 'toegang tot een vertrouwde zone');
+    const tT = m('twee'), tS = m('schil');
+    // The trusted zone, in green (trust), with what it protects inside.
+    const zone = G(p, { o: 0 });
+    b_rect(zone, 940, 250, 540, 470, { fill: COL.panel, stroke: COL.good, sw: 3 });
+    b_caps(zone, 'VERTROUWDE ZONE', 968, 292, { fill: COL.good, size: 16 });
+    b_icon(zone, 'server', { x: 1120, y: 480, s: 1.5 });
+    b_icon(zone, 'db', { x: 1320, y: 480, s: 1.5 });
+    show(zone, .3);
+    b_txt(p, 'toegestaan in twee situaties', 120, 270, tT, { size: 24, fill: COL.dim, anchor: 'start' });
+    // The two ways in, numbered; each gets an arrow into the zone.
+    const way = (k, y, icon, lines, t0, shell) => {
+      const g = G(p, { o: 0 });
+      b_num(g, k, 120, y - 24);
+      if (shell) b_rect(g, 196, y - 44, 108, 88, { stroke: COL.good, rx: 14, sw: 3 });   // the secure shell around the software
+      else b_tick(g, 312, y - 36);                                                      // authenticated
+      b_icon(g, icon, { x: 250, y, s: shell ? .95 : 1.15 });
+      lines.forEach((str, n) => T(g, str, { x: 330, y: y - 6 + n * 28, size: 22, weight: 600 }));
+      show(g, t0);
+      show(b_dart(p, 660, y, 926, 430 + k * 34, { stroke: COL.good }), t0 + .6);
+    };
+    way(1, 350, 'laptop', ['geauthentiseerde', 'apparatuur'], m('app'));
+    way(2, 500, 'code', ['programmatuur binnen', 'een veilige schil'], tS, true);
+    // Anything else stays out: an appliance that is not authenticated is stopped at the wall.
+    const no = G(p, { o: 0 });
+    b_icon(no, 'laptop', { x: 250, y: 650, s: 1.15, stroke: COL.dim });
+    T(no, 'niet geauthentiseerd', { x: 330, y: 658, size: 22, fill: COL.dim });
+    path(no, 'M660 650H886', { stroke: COL.dim, 'stroke-width': 3 });
+    path(no, 'M906 620V680', { stroke: COL.bad, 'stroke-width': 6 });
+    T(no, 'geen toegang', { x: 773, y: 634, size: 20, fill: COL.bad, weight: 600, anchor: 'middle' });
+    show(no, tS + 2.4);
+  }],
+
+  ['registratie', 'Registreren en afmelden', (m) => {
+    const p = panel(0);
+    b_head(p, '5.16.01 · IDENTITEITSBEHEER');
+    b_tab(1, .2);
+    b_kop(p, '5.16.01', 'registreren en afmelden');
+    const tR = m('reg'), tA = m('af'), tS = m('sluit'), rowY = i => 316 + i * 78;
+    // The list of user identities, schematic: three users in it.
+    const sheet = G(p, { o: 0, y: 14 });
+    b_rect(sheet, 540, 244, 520, 400, { fill: COL.panel });
+    b_caps(sheet, 'GEBRUIKERSIDENTIFICATIES', 568, 284, { size: 16 });
+    b_caps(sheet, 'SCHEMATISCH', 1032, 284, { fill: COL.faint, anchor: 'end' });
+    path(sheet, 'M568 300H1032', { stroke: COL.edge, 'stroke-width': 2 });
+    b_rise(sheet, .3);
+    const rows = [...'ABCD'].map((c, i) => {
+      const y = rowY(i), g = G(p, { o: 0 });
+      b_icon(g, 'persoon', { x: 604, y: y + 36, s: .55 });
+      T(g, 'gebruiker ' + c, { x: 644, y: y + 44, size: 22 });
+      if (i < 3) path(g, `M568 ${y + 76}H1032`, { stroke: COL.edge, 'stroke-width': 1.5 });
+      if (i < 3) show(g, .9 + i * .12);
+      return g;
+    });
+    // Registering: a new user gets an identity.
+    show(b_icon(p, 'persoon', { x: 250, y: 420, s: 1.5, o: 0 }), tR);
+    b_txt(p, 'nieuwe gebruiker', 250, 512, tR, { size: 23, weight: 600 });
+    b_arrow(p, 336, 524, 420, tR + .4);
+    show(put(b_caps(p, 'REGISTREREN', 430, 398, { fill: COL.task, size: 16, anchor: 'middle' }), { o: 0 }), tR + .4);
+    c8_fly(p, 'persoon', [250, 420, 1.5], [604, rowY(3) + 36, .55], tR + 1.1);
+    show(rows[3], tR + 1.8, .3);
+    // Signing off: a user who leaves loses it again.
+    b_arrow(p, 1076, 1264, 420, tA);
+    show(put(b_caps(p, 'AFMELDEN', 1170, 398, { fill: COL.task, size: 16, anchor: 'middle' }), { o: 0 }), tA);
+    c8_fly(p, 'persoon', [604, rowY(0) + 36, .55], [1350, 420, 1.5], tA + .3);
+    tw(rows[0], { o: .3 }, tA + .4, .5);
+    draw(path(p, `M592 ${rowY(0) + 37}H780`, { stroke: COL.dim, 'stroke-width': 3 }, { d: 0 }), tA + .5, .5);
+    show(b_icon(p, 'persoon', { x: 1350, y: 420, s: 1.5, o: 0, stroke: COL.dim }), tA + 1);
+    b_txt(p, 'gebruiker vertrekt', 1350, 512, tA + 1, { size: 23, fill: COL.dim });
+    // Closed and formal: whatever is issued is signed off again.
+    show(b_box(p, 560, 672, 480, ['sluitend en formeel'], { col: COL.task, fill: COL.task, hgt: 56 }), tS);
+    b_txt(p, 'elke uitgegeven identiteit wordt ook weer afgemeld', 800, 766, tS + 1.2, { size: 22, fill: COL.dim });
+  }],
+
+  ['groep', 'Groepsaccounts', (m) => {
+    const p = panel(0);
+    b_head(p, '5.16.02 · GROEPSACCOUNTS');
+    b_kop(p, '5.16.02', 'geen groepsaccounts, tenzij');
+    const tN = m('niet'), tT = m('tenzij');
+    // Three people on one account: not allowed, so it is shown and struck through.
+    const grp = G(p, { o: 0 });
+    [200, 330, 460].forEach(x => {
+      b_icon(grp, 'persoon', { x, y: 320, s: 1.2 });
+      path(grp, `M${x} 376L330 446`, { stroke: COL.dim, 'stroke-width': 2.5 });
+    });
+    put(b_chip(grp, 215, 448, 230, 'groepsaccount', { hgt: 52, size: 20, bg: COL.panel }), { o: 1 });
+    show(grp, .3);
+    draw(path(p, 'M150 268L510 524', { stroke: COL.bad, 'stroke-width': 5 }, { d: 0 }), tN, .5);
+    b_txt(p, 'niet toegestaan', 330, 578, tN + .3, { size: 26, weight: 600, fill: COL.bad });
+    // Unless the process owner gives reasons, records it and agrees it with the CISO.
+    b_txt(p, 'tenzij de proceseigenaar dit', 700, 290, tT, { size: 25, weight: 600, anchor: 'start' });
+    show(b_role(p, 760, 450, 'proceseigenaar'), tT);
+    [['mot', 'motiveert'], ['vast', 'vastlegt'], ['ciso', 'afstemt met de CISO']].forEach(([mark, str], k) => {
+      const y = 340 + k * 86;
+      show(b_dart(p, 824, 450, 928, y + 32), m(mark));
+      show(b_box(p, 940, y, 300, [str], { col: COL.task, fill: COL.task }), m(mark));
+    });
+    const ciso = b_role(p, 1400, 544, 'CISO');
+    path(ciso, 'M1252 544H1340', { stroke: COL.dim, 'stroke-width': 3, 'stroke-dasharray': '7 7' });
+    show(ciso, m('ciso') + .3);
+  }],
+
+  ['q1', 'Controlevraag', () => {
+    // Three roles as cards to point at.
+    const p = panel(0);
+    b_head(p, '5.16.02 · GROEPSACCOUNTS');
+    b_txt(p, 'drie rollen', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.cards = C8_Q1.map(([icon, lines], i) => {
+      const g = b_tile(p, { x: c8_q1X(i), y: 264, w: 360, h: 250, icon, lines, iconY: 96, iconS: 1.1, size: 23, textY: 452 });   // textY: clear of the tall 'overheid' icon
+      b_rise(g, .3 + i * .1);
+      return g;
+    });
+  }, { ask: done => {
+    const items = S.cards.map((g, i) => ({ el: g, box: [c8_q1X(i), 264, 360, 250], label: C8_Q1[i][1].join(' ') }));
+    quiz(WIDE, [{
+      id: 'c-groep-1', prompt: ['Een team wil één account delen. Wie motiveert dat en legt het vast?'],
+      build: pickEls(items, 1, 'De proceseigenaar motiveert het groepsaccount en legt dat vast.', i => [
+        'Het bestuur noemt de maatregel hier niet. De proceseigenaar motiveert het en legt het vast.', null,
+        'Met de CISO wordt afgestemd. Motiveren en vastleggen doet de proceseigenaar.'][i]),
+    }, {
+      id: 'c-groep-2', prompt: ['En met wie stemt de proceseigenaar dat af?'],
+      build: pickEls(items, 2, 'De proceseigenaar stemt het groepsaccount af met de CISO.', i => [
+        'Het bestuur noemt de maatregel hier niet. De afstemming is met de CISO.',
+        'De proceseigenaar is zelf degene die afstemt, en wel met de CISO.', null][i]),
+    }, {
+      id: 'c-zone', prompt: ['Wanneer is toegang tot een vertrouwde zone toegestaan?'],
+      // not a pointing question: clear the frames the pointing left on the cards first
+      // (short options and one line of feedback: with more the card runs out of the picture)
+      build: (body, api) => (qlayer(), choice([['Vanaf elk apparaat.'], ['Vanaf geauthentiseerde apparatuur.'], ['Alleen op kantoor.']], 1,
+        'Vanaf geauthentiseerde apparatuur, of vanuit programmatuur binnen een veilige schil.',
+        ['Niet elk apparaat: geauthentiseerde apparatuur, of programmatuur binnen een veilige schil.', null,
+          'De plaats telt niet: geauthentiseerde apparatuur, of programmatuur binnen een veilige schil.'])(body, api)),
+    }], done);
+  } }],
+
+  ['mfa', 'Multi-factorauthenticatie', (m) => {
+    const p = panel(0);
+    b_head(p, '5.17.01 · MULTI-FACTORAUTHENTICATIE');
+    b_tab(2, .2);
+    b_kop(p, '5.17.01', 'multi-factorauthenticatie (MFA)');
+    const tM = m('mfa'), tE = m('een'), tR = m('meer');
+    // A lock: one factor leaves it shut, a second one opens it.
+    const lock = G(p, { x: 800, y: 440, s: 2.4, o: 0 }), look = { stroke: COL.chalk, 'stroke-width': 1.25 };
+    const body = path(lock, 'M-26 -2H26V34H-26Z M0 11V21', look);
+    const bow = path(lock, 'M-15 -2V-16a15 15 0 0 1 30 0V-2', look);
+    show(lock, tM);
+    show(b_box(p, 240, 380, 320, ['één factor']), tE);
+    show(b_dart(p, 572, 412, 712, 452), tE + .3);
+    const shut = b_txt(p, 'niet genoeg', 800, 600, tE + .9, { size: 26, weight: 600, fill: COL.bad });
+    hide(shut, tR, .3);
+    show(b_box(p, 240, 500, 320, ['een tweede factor']), tR);
+    show(b_dart(p, 572, 532, 712, 492), tR + .3);
+    tw(bow, { y: -9, c_stroke: COL.good }, tR + .8, .5, out); tw(body, { c_stroke: COL.good }, tR + .8, .5);
+    b_txt(p, 'toegang', 800, 600, tR + 1.1, { size: 26, weight: 600, fill: COL.good });
+    b_txt(p, 'meer dan één factor', 1180, 470, tR + .6, { size: 30, weight: 600, fill: COL.task });
+  }],
+
+  ['waar', 'Waar MFA geldt', (m) => {
+    const p = panel(0);
+    b_head(p, '5.17.01 · MULTI-FACTORAUTHENTICATIE');
+    b_kop(p, '5.17.01', 'waar MFA ten minste geldt');
+    const tR = m('ra'), badge = (g, x) => put(b_chip(g, x + 16, 300, 84, 'MFA', { col: COL.task, fill: COL.task, hgt: 36, size: 17 }), { o: 1 });
+    b_kick(p, 'TEN MINSTE BIJ', 120, COL.task, m('min'), 264);
+    // Three places where it is the minimum; each appears on its sentence.
+    C8_WAAR.forEach(([icon, lines], i) => {
+      const x = 120 + i * 346, g = b_tile(p, { x, y: 284, w: 320, h: 300, icon, lines, iconY: 128, iconS: 1.3, size: 19 });
+      badge(g, x);
+      b_rise(g, m('p' + (i + 1)));
+    });
+    // And wherever the risk analysis shows it fits: an open place, dashed.
+    b_kick(p, 'EN VERDER', 1158, COL.dim, tR, 264);
+    const more = G(p, { o: 0, y: 14 });
+    b_rect(more, 1158, 284, 320, 300, { fill: COL.panel, stroke: COL.dim, 'stroke-dasharray': '8 7' });
+    badge(more, 1158);
+    b_matrix(more, 1318, 412, 1.3);
+    ['andere situaties waar het', 'uit de risicoanalyse', 'passend blijkt'].forEach((str, k) => T(more, str, { x: 1318, y: 484 + k * 24, size: 19, weight: 600, anchor: 'middle' }));
+    b_rise(more, tR);
+  }],
+
+  ['vormen', 'Twee vormen', (m) => {
+    const p = panel(0);
+    b_head(p, '5.17.01 · MULTI-FACTORAUTHENTICATIE');
+    b_kop(p, '5.17.01', 'twee vormen van MFA');
+    const tA = m('v1'), tZ = m('zoals'), tC = m('cert'), tB = m('v2'), tF = m('factor');
+    const plus = (str, x, y, t0) => b_txt(p, str, x, y, t0, { size: 28, fill: COL.dim });
+    // Form 1: access without a password, such as a PIN together with a hardware token or a personal certificate.
+    const one = G(p, { o: 0 });
+    b_num(one, 1, 120, 252);
+    T(one, 'wachtwoordloze toegang', { x: 190, y: 287, size: 27, weight: 600 });
+    show(one, tA);
+    show(put(b_caps(p, 'ZOALS', 190, 334), { o: 0 }), tZ);
+    show(c8_factor(p, 190, 348, 230, null, 'pincode', '• • • •'), tZ);
+    plus('+', 446, 406, tZ + .5);
+    show(c8_factor(p, 472, 348, 300, 'sleutel', 'hardware-token'), tZ + .5);
+    plus('of', 800, 404, tC);
+    const cert = c8_factor(p, 828, 348, 480, 'cert', 'persoonlijk uniek certificaat', true);   // the second line is the English term
+    b_term(cert, 'passkey', 'passkey', { x: 924, y: 424, size: 19, fill: COL.dim, o: 1 });
+    show(cert, tC);
+    // Form 2: access with a password, together with at least a second factor.
+    const two = G(p, { o: 0 });
+    b_num(two, 2, 120, 506);
+    T(two, 'toegang met een wachtwoord', { x: 190, y: 541, size: 27, weight: 600 });
+    show(two, tB);
+    show(c8_factor(p, 190, 578, 330, null, 'wachtwoord', '• • • • • • • • • •'), tB + .4);
+    plus('+', 546, 636, tF);
+    show(c8_factor(p, 572, 578, 470, 'telefoon', 'minimaal een tweede factor'), tF);
+  }, { hold: true }],   // the lesson waits here: the English term can be heard before it goes on
+
+  ['nietmogelijk', 'Als MFA niet kan', (m) => {
+    const p = panel(0);
+    b_head(p, '5.17.01 · MULTI-FACTORAUTHENTICATIE');
+    b_kop(p, '5.17.01', 'als MFA niet mogelijk is');
+    const tM = m('mit'), tC = m('ciso'), tE = m('eig');
+    // An account where multi-factor authentication cannot be used.
+    b_rise(b_tile(p, { x: 130, y: 300, w: 300, h: 200, icon: 'sleutel', lines: ['account'], iconY: 84, iconS: 1.3 }), .3);
+    show(b_chip(p, 205, 526, 150, 'MFA', { hgt: 48, size: 22, fill: COL.dim }), .6);
+    draw(path(p, 'M190 586L370 514', { stroke: COL.bad, 'stroke-width': 5 }, { d: 0 }), 1.7, .5);
+    b_txt(p, 'niet mogelijk', 280, 632, 2, { size: 25, weight: 600, fill: COL.bad });
+    // Then other mitigating measures take its place.
+    b_arrow(p, 448, 566, 420, tM);
+    show(b_box(p, 580, 360, 400, ['andere mitigerende', 'maatregelen'], { col: COL.task, fill: COL.task, hgt: 120, size: 25 }), tM + .3);
+    // The CISO is involved (dashed: advice); the process owner approves, and the stamp lands on the measures.
+    show(b_role(p, 1300, 300, 'CISO'), tC);
+    show(b_dart(p, 1244, 318, 994, 388, { dash: true }), tC + .3);
+    b_txt(p, 'wordt betrokken', 1300, 414, tC + .5, { size: 20, fill: COL.dim });
+    show(b_role(p, 1300, 560, 'proceseigenaar', COL.task), tE);
+    b_txt(p, 'keurt goed', 1300, 674, tE + .3, { size: 20, fill: COL.task, weight: 600 });
+    const stamp = b_stamp(p, 1300, 722, 'GOEDGEKEURD');   // starts under the process owner, not across the face
+    show(stamp, tE + .5, .3); tw(stamp, { x: 880, y: 342 }, tE + 1, .9, io);
+  }],
+
+  ['federatief', 'MFA gecombineerd', (m) => {
+    const p = panel(0);
+    b_head(p, '5.17.01 · MULTI-FACTORAUTHENTICATIE');
+    b_kop(p, '5.17.01', 'MFA gecombineerd');
+    const tF = m('fed');
+    b_txt(p, 'waar mogelijk en veilig:', 120, 262, .4, { size: 23, fill: COL.dim, anchor: 'start' });
+    b_txt(p, 'met federatieve authenticatievoorzieningen', 378, 262, tF, { size: 23, weight: 600, anchor: 'start' });
+    // Two of them, schematic: one sign-on for several systems, and a way in through a stepping stone.
+    const card = (x, term, slug, nl, t0) => {
+      const g = G(p, { o: 0, y: 14 });
+      b_rect(g, x, 290, 660, 400, { fill: COL.panel });
+      b_term(g, term, slug, { x: x + 32, y: 342, size: 26, o: 1 });
+      T(g, nl, { x: x + 32, y: 378, size: 20, fill: COL.dim });
+      b_caps(g, 'SCHEMATISCH', x + 628, 668, { fill: COL.faint, anchor: 'end' });
+      b_icon(g, 'persoon', { x: x + 90, y: 530, s: 1.15 });
+      path(g, `M${x + 134} 530H${x + 168}`, { stroke: COL.dim, 'stroke-width': 3 });
+      put(b_chip(g, x + 172, 508, 90, 'MFA', { col: COL.task, fill: COL.task, hgt: 44, size: 18 }), { o: 1 });
+      b_rise(g, t0);
+      return g;
+    };
+    const sso = card(120, 'Single Sign On', 'single-sign-on', 'eenmalig inloggen voor meerdere systemen', m('sso'));
+    [['server', 440], ['db', 530], ['code', 620]].forEach(([icon, y]) => {
+      path(sso, `M394 530C470 530 480 ${y} 560 ${y}`, { stroke: COL.dim, 'stroke-width': 3 });
+      b_icon(sso, icon, { x: 620, y, s: .8 });
+    });
+    const step = card(820, 'Stepping Stone', 'stepping-stone', 'een oplossing met een tussenstap', m('step'));
+    path(step, 'M1094 530H1128', { stroke: COL.dim, 'stroke-width': 3 });
+    put(b_box(step, 1132, 498, 180, ['tussenstap'], { hgt: 64, size: 21 }), { o: 1 });
+    path(step, 'M1324 530H1366 M1354 520L1366 530L1354 540', { stroke: COL.dim, 'stroke-width': 3 });
+    b_icon(step, 'server', { x: 1416, y: 530, s: .8 });
+  }, { hold: true }],   // the English terms of this picture can be heard before the lesson goes on
+
+  ['uitgifte', 'Authenticatie-informatie uitgeven', (m) => {
+    const p = panel(0);
+    b_head(p, '5.17.01 · MULTI-FACTORAUTHENTICATIE');
+    b_kop(p, '5.17.01', 'authenticatie-informatie uitgeven');
+    const tI = m('id'), tU = m('uit'), tP = m('proc');
+    show(b_icon(p, 'persoon', { x: 220, y: 450, s: 1.6, o: 0 }), .3);
+    b_txt(p, 'gebruiker', 220, 546, .4, { size: 24, weight: 600 });
+    // The order matters: first the identity is established, only then the information is issued.
+    const stepCard = (n, x, w, lines, t0, sign) => {
+      const g = G(p, { o: 0, y: 14 });
+      b_rect(g, x, 380, w, 140, { fill: COL.panel });
+      b_num(g, n, x + 24, 426);
+      sign(g, x + 120);
+      T(g, lines[0], { x: x + 164, y: 444, size: 24, weight: 600 });
+      T(g, lines[1], { x: x + 164, y: 476, size: 20, fill: COL.dim });
+      b_rise(g, t0);
+    };
+    stepCard(1, 370, 440, ['identiteit vastgesteld', 'met voldoende zekerheid'], tI, (g, x) => b_tick(g, x, 452));
+    b_arrow(p, 828, 932, 450, tU);
+    b_txt(p, 'pas daarna', 880, 428, tU, { size: 18, fill: COL.dim });
+    stepCard(2, 950, 470, ['authenticatie-informatie', 'uitgegeven'], tU + .3, (g, x) => b_icon(g, 'sleutel', { x: x + 4, y: 450, s: .6, stroke: COL.task }));
+    // Both steps follow formally adopted procedures.
+    const frame = G(p, { o: 0 });
+    b_rect(frame, 340, 310, 1110, 250, { stroke: COL.task, rx: 8 });
+    b_caps(frame, 'FORMEEL VASTGESTELDE PROCEDURES', 368, 350, { fill: COL.task, size: 16 });
+    show(frame, tP);
+  }],
+
+  ['misbruik', 'Letten op misbruik', (m) => {
+    const p = panel(0);
+    b_head(p, '5.17.01 · MULTI-FACTORAUTHENTICATIE');
+    b_kop(p, '5.17.01', 'letten op misbruik');
+    const tD = m('def'), tM = m('mon'), tA = m('actie'), tT = m('twee');
+    // A chain: scenarios of misuse are defined, monitored, and acted on.
+    const def = G(p, { o: 0, y: 14 });
+    b_rect(def, 120, 244, 500, 110, { fill: COL.panel });
+    b_term(def, 'Use Cases', 'use-cases', { x: 148, y: 292, size: 25, o: 1 });
+    T(def, 'scenario’s voor misbruik: gedefinieerd', { x: 148, y: 330, size: 19, fill: COL.dim });
+    b_rise(def, tD);
+    b_arrow(p, 634, 700, 299, tM);
+    const mon = G(p, { o: 0, y: 14 });
+    b_rect(mon, 712, 244, 300, 110, { fill: COL.panel });
+    b_icon(mon, 'loep', { x: 766, y: 297, s: .8, stroke: COL.task });
+    T(mon, 'gemonitord', { x: 814, y: 307, size: 23, weight: 600 });
+    b_rise(mon, tM + .2);
+    b_arrow(p, 1026, 1092, 299, tA);
+    const act = G(p, { o: 0, y: 14 });
+    b_rect(act, 1104, 244, 376, 110, { fill: COL.panel, stroke: COL.task });
+    T(act, 'passende actie', { x: 1132, y: 292, size: 23, weight: 600, fill: COL.task });
+    T(act, 'als een scenario optreedt', { x: 1132, y: 326, size: 19, fill: COL.dim });
+    b_rise(act, tA + .2);
+    // Two scenarios that are always among them, schematic.
+    b_kick(p, 'IN IEDER GEVAL', 120, COL.task, tT, 412);
+    show(put(b_caps(p, 'SCHEMATISCH', 1480, 412, { fill: COL.faint, anchor: 'end' }), { o: 0 }), tT);
+    const place = G(p, { o: 0, y: 14 });
+    b_rect(place, 120, 428, 660, 300, { fill: COL.panel });
+    T(place, 'inlogpogingen vanaf ongebruikelijke plekken', { x: 148, y: 470, size: 21, weight: 600 });
+    [[250, 590], [282, 566], [300, 612], [226, 622], [330, 584], [268, 640], [312, 646], [344, 620], [236, 578]].forEach(([x, y]) =>
+      mk('circle', { cx: x, cy: y, r: 7, fill: COL.dim }, place));
+    T(place, 'gebruikelijk', { x: 286, y: 700, size: 18, fill: COL.dim, anchor: 'middle' });
+    mk('circle', { cx: 640, cy: 570, r: 8, fill: COL.bad }, place);
+    mk('circle', { cx: 640, cy: 570, r: 22, fill: 'none', stroke: COL.bad, 'stroke-width': 3 }, place);
+    T(place, 'ongebruikelijk', { x: 640, y: 628, size: 18, fill: COL.bad, weight: 600, anchor: 'middle' });
+    b_rise(place, m('plek'));
+    const peak = G(p, { o: 0, y: 14 });
+    b_rect(peak, 820, 428, 660, 300, { fill: COL.panel });
+    T(peak, 'pieken in mislukte inlogpogingen', { x: 848, y: 470, size: 21, weight: 600 });
+    [14, 20, 12, 18, 24, 16, 12, 20, 14, 150, 190, 128, 18, 14, 20].forEach((hgt, k) =>
+      mk('rect', { x: 870 + k * 38, y: 700 - hgt, width: 24, height: hgt, rx: 2, fill: hgt > 100 ? COL.bad : COL.dim }, peak));
+    path(peak, 'M856 700H1444', { stroke: COL.edge, 'stroke-width': 2 });
+    b_rise(peak, m('piek'));
+  }, { hold: true }],   // the lesson waits here: the English term can be heard before it goes on
+
+  ['manager', 'Wachtwoordmanager', (m) => {
+    const p = panel(0);
+    b_head(p, '5.17.02 · WACHTWOORDMANAGER');
+    b_kop(p, '5.17.02', 'een wachtwoordmanager voor alle medewerkers');
+    const tW = m('wm'), xs = [300, 500, 700, 900, 1100, 1300];
+    xs.forEach((x, i) => show(b_icon(p, 'persoon', { x, y: 340, s: 1.25, o: 0 }), .3 + i * .08));
+    b_txt(p, 'alle medewerkers', 800, 428, .5, { size: 24, weight: 600 });
+    // Each of them is offered a vault for passwords.
+    xs.forEach((x, i) => {
+      const g = b_icon(p, 'kluis', { x, y: 500, s: .9, o: 0, stroke: COL.task });
+      tw(g, { o: 1, y: 520 }, tW + i * .12, .5, out);
+    });
+    b_txt(p, 'wachtwoordmanager', 800, 622, tW + .6, { size: 28, weight: 600, fill: COL.task });
+    b_txt(p, 'of een vergelijkbare oplossing', 800, 660, m('of'), { size: 23, fill: COL.dim });
+  }],
+
+  ['afdwingen', 'Wachtwoordeisen', (m) => {
+    const p = panel(0);
+    b_head(p, '5.17.03 · WACHTWOORDEISEN');
+    b_kop(p, '5.17.03', 'eisen geautomatiseerd afgedwongen');
+    const tA = m('auto'), tZ = m('zwak');
+    // Two new passwords, schematic: a short one and a long one.
+    [[320, '• • • •'], [520, '• • • • • • • • • • • •']].forEach(([y, dots], k) => {
+      const g = G(p, { o: 0 });
+      b_caps(g, 'NIEUW WACHTWOORD', 150, y - 12);
+      b_rect(g, 150, y, 420, 72, { fill: COL.panel });
+      T(g, dots, { x: 178, y: y + 46, size: 24, font: MONO });
+      show(g, .3 + k * .15);
+    });
+    b_txt(p, 'SCHEMATISCH', 150, 636, .6, { size: 15, fill: COL.faint, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    // The requirements are enforced by a machine, not by good intentions.
+    const gate = G(p, { o: 0, y: 14 });
+    b_rect(gate, 700, 346, 320, 220, { fill: COL.panel, stroke: COL.task, sw: 3 });
+    b_icon(gate, 'tandwiel', { x: 860, y: 416, s: 1.2, stroke: COL.task });
+    T(gate, 'eisen aan wachtwoorden', { x: 860, y: 500, size: 22, weight: 600, fill: COL.task, anchor: 'middle' });
+    T(gate, 'geautomatiseerd', { x: 860, y: 532, size: 20, fill: COL.dim, anchor: 'middle' });
+    b_rise(gate, tA);
+    show(b_dart(p, 582, 356, 688, 420), tA + .4); show(b_dart(p, 582, 556, 688, 496), tA + .4);
+    const verdict = (y, str, col, t0, yg) => {
+      show(b_dart(p, 1032, yg, 1138, y + 36, { stroke: col }), t0);
+      show(b_box(p, 1150, y, 330, [str], { col, fill: col, hgt: 72, size: 22 }), t0 + .2);
+    };
+    verdict(320, 'voldoet niet: geweigerd', COL.bad, tZ, 420);
+    verdict(520, 'voldoet', COL.good, tZ + 1.8, 496);
+  }],
+
+  ['bijzonder', 'Bijzondere rechten', (m) => {
+    const p = panel(0);
+    b_head(p, '5.18.01 · BIJZONDERE RECHTEN');
+    b_tab(3, .2);
+    b_kop(p, '5.18.01', 'accounts met bijzondere rechten');
+    const tM = m('mon'), tO = m('on'), tI = m('inc'), tA = m('af'), rowY = i => 312 + i * 84;
+    // The log of changes to such accounts, schematic; every change is watched.
+    const sheet = G(p, { o: 0, y: 14 });
+    b_rect(sheet, 120, 244, 700, 330, { fill: COL.panel });
+    b_caps(sheet, 'WIJZIGINGEN AAN ACCOUNTS MET BIJZONDERE RECHTEN', 148, 284, { size: 14 });
+    path(sheet, 'M148 300H792', { stroke: COL.edge, 'stroke-width': 2 });
+    b_rise(sheet, .3);
+    b_txt(p, 'SCHEMATISCH', 120, 602, .6, { size: 15, fill: COL.faint, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    show(b_icon(p, 'loep', { x: 900, y: 286, s: 1.4, o: 0, stroke: COL.task }), tM);
+    b_txt(p, 'gemonitord', 954, 296, tM, { size: 25, weight: 600, fill: COL.task, anchor: 'start' });
+    const rows = [['account A · aangemaakt', true], ['account B · aangepast', true], ['account C · aangepast', false]].map(([str, ok], i) => {
+      const y = rowY(i), g = G(p, { o: 0 }), col = ok ? COL.good : COL.bad;
+      const name = T(g, str, { x: 176, y: y + 50, size: 22 });
+      if (i < 2) path(g, `M148 ${y + 82}H792`, { stroke: COL.edge, 'stroke-width': 1.5 });
+      show(g, tM + .6 + i * .5);
+      const tag = b_chip(p, 548, y + 22, 244, ok ? 'geautoriseerd' : 'niet geautoriseerd', { col, fill: col, hgt: 40, size: 16 });
+      show(tag, ok ? tM + 1 + i * .5 : tO);
+      return name;
+    });
+    // A change without authorisation is a security incident: recorded and handled as one.
+    tw(rows[2], { c_fill: COL.bad }, tO, .4);
+    b_arrow(p, 834, 908, rowY(2) + 42, tI, { stroke: COL.bad });
+    show(b_box(p, 920, rowY(2) - 6, 560, ['informatiebeveiligingsincident'], { col: COL.bad, fill: COL.bad, hgt: 96, size: 25 }), tI + .2);
+    [['vastgelegd', 920], ['afgehandeld', 1210]].forEach(([str, x], k) => {
+      b_down(p, x + 135, 580, 620, tA + k * 1.6, COL.dim);
+      show(b_box(p, x, 630, 270, [str]), tA + .2 + k * 1.6);
+    });
+  }],
+
+  ['jaarlijks', 'Rechten beoordelen', (m) => {
+    const p = panel(0);
+    b_head(p, '5.18.02 · TOEGANGSRECHTEN BEOORDELEN');
+    b_kop(p, '5.18.02', 'toegangsrechten beoordelen');
+    const tA = m('alle'), tR = m('ra'), cx = 400, cy = 500, R = 150;
+    // A year as a ring with the access rights inside; the marker goes round once and they are reviewed.
+    const ring = b_year(p, cx, cy, R, '');
+    b_icon(ring, 'sleutel', { x: cx, y: cy - 20, s: 1.5 });
+    T(ring, 'toegangsrechten', { x: cx, y: cy + 54, size: 22, weight: 600, anchor: 'middle' });
+    b_caps(ring, '12 MAANDEN', cx, cy + R + 46, { fill: COL.faint, anchor: 'middle' });
+    show(ring, .3);
+    const hand = G(p, { x: cx, y: cy, o: 0 });
+    mk('circle', { cx: 0, cy: -R, r: 11, fill: COL.task }, hand);
+    show(hand, tA, .3); tw(hand, { r: 360 }, tA + .2, 2.4, io);
+    show(b_chip(p, cx - 100, cy - R - 66, 200, 'beoordeeld', { col: COL.task, fill: COL.task, hgt: 40, size: 18, bg: COL.board }), tA + 2.5);
+    b_point(p, 0, ['alle uitgegeven toegangsrechten'], tA, 372, 680);
+    const last = b_point(p, 1, ['minimaal één keer per jaar beoordeeld'], tA + 1.6, 372, 680).lastChild;
+    last.setAttribute('fill', COL.task); last.setAttribute('font-weight', 600);
+    // A risk assessment decides whether it has to be sooner: extra moments on the ring, dashed.
+    show(put(b_matrix(p, 726, 588, 1.2), { o: 0 }), tR);
+    show(b_box(p, 790, 540, 620, ['een risicoafweging bepaalt', 'of dat sneller moet'], { hgt: 96, size: 23 }), tR);
+    [120, 240].forEach((deg, k) => {
+      const a = deg * Math.PI / 180;
+      show(put(mk('circle', { cx: cx + R * Math.sin(a), cy: cy - R * Math.cos(a), r: 10, fill: COL.board, stroke: COL.task, 'stroke-width': 3, 'stroke-dasharray': '4 3' }, p), { o: 0 }), tR + 1 + k * .3);
+    });
+  }],
+
+  ['q2', 'Controlevraag', () => {
+    // The four controls of this chapter as cards to point at.
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 5.15 TOT EN MET 5.18');
+    b_tab(-1, .2);
+    b_txt(p, 'de vier beheersmaatregelen van dit hoofdstuk', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.cards = C8_Q2.map(([nr, icon, lines], i) => {
+      const x = c8_q2X(i), g = b_tile(p, { x, y: 264, w: 300, h: 250, icon, lines, iconY: 112, iconS: 1.05, size: 21 });
+      T(g, nr, { x: x + 150, y: 312, size: 26, fill: COL.task, weight: 700, anchor: 'middle', font: MONO });
+      b_rise(g, .3 + i * .1);
+      return g;
+    });
+  }, { ask: done => {
+    const items = S.cards.map((g, i) => ({ el: g, box: [c8_q2X(i), 264, 300, 250], label: C8_Q2[i][0] + ' ' + C8_Q2[i][2].join(' ') }));
+    quiz(WIDE, [{
+      id: 'c-toegang-1', prompt: ['Een beheerder logt in op de besturing van een gemaal. Waar staat dat daar MFA bij hoort?'],
+      build: pickEls(items, 2, '5.17.01: multi-factorauthenticatie geldt ten minste voor accounts met beheerrechten.', i => [
+        'Dat gaat over toegang tot een vertrouwde zone. Multi-factorauthenticatie staat in 5.17.01.',
+        'Dat gaat over registreren, afmelden en groepsaccounts. Multi-factorauthenticatie staat in 5.17.01.', null,
+        'Dat gaat over het monitoren en beoordelen van rechten. Multi-factorauthenticatie staat in 5.17.01.'][i]),
+    }, {
+      id: 'c-toegang-2', prompt: ['Een stagiair vertrekt. Waar staat dat de gebruiker wordt afgemeld?'],
+      build: pickEls(items, 1, '5.16.01: er is een sluitende, formele procedure voor het registreren en afmelden van gebruikers.', i => [
+        'Dat gaat over toegang tot een vertrouwde zone. Het afmelden van gebruikers staat in 5.16.01.', null,
+        'Dat gaat over inloggen en wachtwoorden. Het afmelden van gebruikers staat in 5.16.01.',
+        'Daar worden rechten gemonitord en beoordeeld. Het afmelden van de gebruiker zelf staat in 5.16.01.'][i]),
+    }, {
+      id: 'c-toegang-3', prompt: ['Iemand krijgt zonder autorisatie beheerrechten. Waar staat dat dit een incident is?'],
+      build: pickEls(items, 3, '5.18.01: een ongeautoriseerde wijziging aan een account met bijzondere rechten is een informatiebeveiligingsincident.', i => [
+        'Dat gaat over toegang tot een vertrouwde zone. Ongeautoriseerde wijzigingen aan bijzondere rechten staan in 5.18.01.',
+        'Dat gaat over registreren, afmelden en groepsaccounts. Ongeautoriseerde wijzigingen aan bijzondere rechten staan in 5.18.01.',
+        'Dat gaat over inloggen en wachtwoorden. Ongeautoriseerde wijzigingen aan bijzondere rechten staan in 5.18.01.', null][i]),
+    }], done);
+  } }],
+
+  ['wrap', 'Samenvatting', (m) => {
+    const p = panel(0);
+    b_head(p, 'SAMENVATTING');
+    hide(S.tabsG, 0, .4);
+    b_wrap(p, [
+      ['Een vertrouwde zone: toegang in twee situaties.', 'Vanaf geauthentiseerde apparatuur, of vanuit programmatuur binnen een veilige schil.', 'w1'],
+      ['Gebruikers worden geregistreerd en afgemeld.', 'Groepsaccounts alleen als de proceseigenaar het motiveert, vastlegt en afstemt met de CISO.', 'w2'],
+      ['Multi-factorauthenticatie op ten minste drie plekken.', 'De digitale werkomgeving, wat via internet bereikbaar is, en accounts met beheerrechten.', 'w3'],
+      ['Toegangsrechten worden bewaakt.', 'Bijzondere rechten gemonitord; alle rechten minimaal één keer per jaar beoordeeld.', 'w4'],
+    ], m);
+  }],
+
+  ['final1', 'Oefenronde 1', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-stellingen', prompt: ['Klopt het, of klopt het niet?'],
+    build: grid([
+      { parts: ['Een groepsaccount mag altijd, zolang het wachtwoord sterk is.'], ans: ['n'], why: 'Groepsaccounts zijn niet toegestaan, tenzij de proceseigenaar dit motiveert, vastlegt en afstemt met de CISO.' },
+      { parts: ['Multi-factorauthenticatie hoort bij accounts met beheerrechten.'], ans: ['k'], why: 'En ook bij het primaire aanloggen op de digitale werkomgeving en bij voorzieningen die via internet bereikbaar zijn.' },
+      { parts: ['Alle medewerkers krijgen een wachtwoordmanager aangeboden, of iets vergelijkbaars.'], ans: ['k'], why: 'De eisen aan wachtwoorden worden daarnaast geautomatiseerd afgedwongen.' },
+      { parts: ['Kan multi-factorauthenticatie bij een account niet, dan hoeft er niets te gebeuren.'], ans: ['n'], why: 'Dan komen er andere mitigerende maatregelen; de CISO wordt betrokken en de proceseigenaar keurt ze goed.' },
+      { parts: ['Toegangsrechten worden alleen beoordeeld na een incident.'], ans: ['n'], why: 'Alle uitgegeven toegangsrechten worden minimaal één keer per jaar beoordeeld.' },
+    ], KN, { multi: false, text: true }),
+  }], done, 'Oefenronde 1 van 2') }],
+
+  ['final2', 'Oefenronde 2', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-uitgifte', prompt: ['Wanneer wordt authenticatie-informatie uitgegeven?'],
+    build: choice([['Zodra iemand erom vraagt.'], ['Nadat de identiteit met voldoende zekerheid is vastgesteld.'], ['Na een jaar in dienst.']], 1,
+      'Eerst wordt de identiteit van de gebruiker met voldoende zekerheid vastgesteld, volgens formeel vastgestelde procedures.',
+      ['Een verzoek is niet genoeg: eerst wordt de identiteit met voldoende zekerheid vastgesteld.', null,
+        'De maatregel noemt geen wachttijd: het gaat erom dat de identiteit met voldoende zekerheid is vastgesteld.']),
+  }, {
+    id: 'p-vorm', prompt: ['Welke vorm van multi-factorauthenticatie noemt de BIO?'],
+    build: choice([['Een wachtwoord met minimaal een tweede factor.'], ['Twee wachtwoorden na elkaar.'], ['Een wachtwoord dat elke maand wijzigt.']], 0,
+      'De twee vormen zijn wachtwoordloze toegang, en een wachtwoord met minimaal een tweede factor.',
+      [null, 'Twee wachtwoorden zijn twee keer dezelfde soort factor. De BIO noemt een wachtwoord met minimaal een tweede factor.',
+        'Dat is nog steeds één factor. De BIO noemt een wachtwoord met minimaal een tweede factor.']),
+  }, {
+    id: 'p-incident', prompt: ['Een account met bijzondere rechten is zonder autorisatie aangepast. Wat is dat?'],
+    build: choice([['Een gewone wijziging.'], ['Een zaak voor de leverancier.'], ['Een informatiebeveiligingsincident.']], 2,
+      'Het is een informatiebeveiligingsincident en wordt als zodanig vastgelegd en afgehandeld.',
+      ['Zonder autorisatie is het geen gewone wijziging: het is een informatiebeveiligingsincident.',
+        'De organisatie legt het zelf vast en handelt het af: het is een informatiebeveiligingsincident.', null]),
+  }], done, 'Oefenronde 2 van 2 · vraag') }],
+
+  ['finish', 'Afgerond', () => { panel(0); }, { ask: finishCard }],
+].map(([id, title, run, extra]) => ({ id, title, run, ...extra }));
+
+boot();
+</script>
+</body>
+</html>

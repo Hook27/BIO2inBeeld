@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nooit klaar · BIO2 in beeld</title>
+<link rel="stylesheet" href="../lib/engine.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2314171a'/%3E%3Cpath d='M15 52V38M27 52V20M39 52V32M51 52V14' stroke='%238d959d' stroke-width='7'/%3E%3Cpath d='M7 28H57' stroke='%23c9a45c' stroke-width='4'/%3E%3C/svg%3E">
+<link rel="expect" href="#bar" blocking="render"><!-- hold the first frame until the player exists, so the page transition can run -->
+</head>
+<body>
+<script src="../lib/engine.js"></script>
+<script src="audio/nl/timings.js"></script>
+<script>
+'use strict';
+// Hoofdstuk 4: §8 (monitoring en continue verbetering), §9 (transparantie en verantwoording), §10 (toezicht),
+// §11 (overige normen, wet- en regelgeving) en §11.1 (Cyberbeveiligingswet) van de BIO2.
+// Beat ids match content/bio2/ch04/narration.nl.json. One idea per beat.
+const CHAPTER = { number: 4, title: 'Nooit klaar: verbeteren, verantwoorden, toezicht en de Cbw', minutes: 8, language: 'nl', next: '../ch05/' };
+
+/* ---------- chapter drawing helpers (prefixed c4_; the shared b_ helpers live in ../lib/engine.js) ---------- */
+Object.assign(ICON, {
+  certificaat: 'M-16 -8a16 16 0 1 0 32 0a16 16 0 1 0 -32 0 M-9 6L-14 32L0 22L14 32L9 6 M-7 -8L-2 -3L8 -14',
+  bel: 'M-18 16H18L12 6V-6a12 12 0 0 0 -24 0V6Z M-5 22a5 5 0 0 0 10 0',
+  pet: 'M-30 -8L0 -20L30 -8L0 4Z M-16 -2V12C-16 18 16 18 16 12V-2 M30 -8V10',
+});
+// A card: frame, a title and sub lines, optionally an icon on the left. Returns the group, hidden and a little low.
+const c4_card = (p, x, y, w, hgt, title, subs = [], { col = COL.edge, icon = null, size = 26, dy = 0 } = {}) => {
+  const g = G(p, { o: 0, y: 14 }), tx = x + (icon ? 96 : 30);
+  g._frame = b_rect(g, x, y, w, hgt, { fill: COL.panel, stroke: col });
+  if (icon) b_icon(g, icon, { x: x + 52, y: y + hgt / 2, s: .9, stroke: COL.dim });
+  const y0 = y + hgt / 2 + size * .35 - subs.length * 14 + dy;   // dy lifts the title when something else sits under it
+  T(g, title, { x: tx, y: y0, size, weight: 600, fill: col === COL.edge ? COL.chalk : col });
+  subs.forEach((str, i) => T(g, str, { x: tx, y: y0 + 32 + i * 26, size: 20, fill: COL.dim }));
+  return g;
+};
+// A curved link from (x1,y1) to (x2,y2), leaving and arriving horizontally, with an arrowhead; draws itself at t0.
+const c4_link = (p, x1, y1, x2, y2, t0, stroke = COL.dim) => {
+  const xm = (x1 + x2) / 2, d = Math.sign(x2 - x1);
+  draw(path(p, `M${x1} ${y1}C${xm} ${y1} ${xm} ${y2} ${x2} ${y2} M${x2 - 14 * d} ${y2 - 10}L${x2} ${y2}L${x2 - 14 * d} ${y2 + 10}`, { stroke, 'stroke-width': 3 }, { d: 0 }), t0, .6);
+};
+
+/* ---------- chapter data (used inside BEATS, so defined above it) ---------- */
+const C4_TABS = ['1 VERBETEREN', '2 VERANTWOORDEN', '3 TOEZICHT', '4 WET EN CBW'];
+// Three more points of the Cyberbeveiligingswet (BIO2 §11.1), as tiles the reader can point at.
+const C4_LAW = [
+  { mark: 'opl', icon: 'pet', name: 'opleiding', lines: ['bestuurders kunnen sturen', 'op risico’s; medewerkers', 'volgen regelmatig training'] },
+  { mark: 'meld', icon: 'bel', name: 'meldplicht', lines: ['significante incidenten', 'tijdig melden, binnen', 'de doorlooptijden'] },
+  { mark: 'toez', icon: 'loep', name: 'toezicht', lines: ['een toezichthouder ziet', 'toe op de invulling', 'van de zorgplicht'] },
+];
+const C4_LX = i => 130 + i * 460;
+
+/* ---------- beats: [id, title, run(m, D), { ask }?] ---------- */
+const BEATS = [
+  ['intro', 'Nooit klaar', (m, D) =>
+    b_title(m, D, 'DEEL A · HET KADER · HOOFDSTUK 4', 'Nooit klaar', 'Blijven verbeteren, verantwoording afleggen, toezicht en de Cyberbeveiligingswet.')],
+
+  ['cyclus', 'Geen eenmalig project', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 8 · MONITORING EN CONTINUE VERBETERING');
+    b_tabs(C4_TABS, .3); b_tab(0, .3);
+    // A project: a line with a beginning and an end. Not this.
+    const label = b_txt(p, 'eenmalig project', 800, 222, .2, { size: 30, weight: 600 });
+    const proj = G(p, { o: 0 });
+    path(proj, 'M400 262H1200 M400 248V276 M1200 240V284', { stroke: COL.chalk, 'stroke-width': 4 });
+    T(proj, 'begin', { x: 400, y: 314, size: 20, fill: COL.dim, anchor: 'middle' });
+    T(proj, 'einde', { x: 1200, y: 314, size: 20, fill: COL.dim, anchor: 'middle' });
+    show(proj, m('proj'));
+    draw(path(p, 'M676 212H924', { stroke: COL.bad, 'stroke-width': 4 }, { d: 0 }), m('streep'), .4);
+    tw(label, { c_fill: COL.faint }, m('streep', .2), .4); tw(proj, { o: .3 }, m('streep', .2), .4);
+    // This: a ring that keeps turning.
+    const tR = m('rond'), at = deg => [800 + 300 * Math.cos(deg * Math.PI / 180), 580 + 140 * Math.sin(deg * Math.PI / 180)];
+    draw(path(p, 'M500 580a300 140 0 1 0 600 0a300 140 0 1 0 -600 0', { stroke: COL.task, 'stroke-width': 4 }, { d: 0 }), tR, 1.2);
+    b_txt(p, 'cyclisch proces', 800, 590, tR + .6, { size: 32, weight: 600, fill: COL.task });
+    const dot = G(p, { o: 0 });
+    mk('circle', { r: 10, fill: COL.task }, dot);
+    prog(q => { const [x, y] = at(-90 + 540 * q); put(dot, { x, y, o: 1 }); }, tR + 1.2, 6, lin);
+    [['onderhouden', -90], ['evalueren', 30], ['verbeteren', 150]].forEach(([str, deg], i) => {
+      const [x, y] = at(deg);
+      show(b_chip(p, x - 125, y - 28, 250, str, { hgt: 56, size: 23, bg: COL.panel }), m('st') + 1.6 + i * .5);
+    });
+  }],
+
+  ['aanleiding', 'Aanleiding om bij te sturen', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 8 · MONITORING EN CONTINUE VERBETERING');
+    // What is kept up to date, in the middle from the start.
+    const core = G(p, { o: 0 });
+    const frame = b_rect(core, 560, 370, 480, 160, { fill: COL.panel, stroke: COL.dim });
+    T(core, 'risicoanalyse', { x: 800, y: 440, size: 28, weight: 600, anchor: 'middle' });
+    T(core, 'en beheersmaatregelen', { x: 800, y: 478, size: 28, weight: 600, anchor: 'middle' });
+    show(core, .2);
+    [['wijziging in wetgeving', 'wet', 400], ['nieuwe bedreiging', 'dreig', 500]].forEach(([str, mark, y]) => {
+      show(b_chip(p, 110, y - 28, 360, str, { hgt: 56 }), m(mark));
+      b_arrow(p, 482, 550, y, m(mark, .25));
+    });
+    tw(frame, { c_stroke: COL.task }, m('bij'), .4);
+    b_txt(p, 'bijwerken', 800, 590, m('bij', .2), { size: 32, weight: 600, fill: COL.task });
+  }],
+
+  ['instrumenten', 'Actueel houden', (m) => {
+    // Same picture: on the right, what keeps it up to date.
+    const p = S.panel;
+    [['interne audits', 'audit'], ['managementbeoordelingen', 'mb'], ['gestroomlijnde documentatie', 'doc']].forEach(([str, mark], i) => {
+      const y = 370 + i * 55;
+      show(b_chip(p, 1130, y, 360, str, { hgt: 50, size: 19 }), m(mark));
+      b_arrow(p, 1120, 1050, y + 25, m(mark, .25));
+    });
+    b_txt(p, 'zo blijft het risicomanagement actueel', 800, 700, m('act'), { size: 30, weight: 600, fill: COL.good });
+  }],
+
+  ['vertrouwen', 'Transparant zijn', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 9 · TRANSPARANTIE EN VERANTWOORDING');
+    b_tab(1, .2);
+    // The government as a block you cannot look into, at first.
+    const wall = put(b_rect(p, 820, 290, 520, 330, { fill: COL.panel, stroke: COL.dim, 'fill-opacity': 1 }), { o: 0 });
+    show(wall, .2);
+    b_txt(p, 'overheid', 1080, 268, .2, { size: 28, weight: 600 });
+    const closed = b_txt(p, 'hoe is het geregeld?', 1080, 464, .5, { size: 24, fill: COL.dim });
+    [350, 455, 560].forEach((y, i) => show(b_icon(p, 'persoon', { x: 260, y, s: 1.1, o: 0 }), m('burger') + i * .12));
+    b_txt(p, 'burgers', 260, 650, m('burger', .2), { size: 26, fill: COL.dim });
+    // Transparent: you can see how it is arranged and what state it is in.
+    const tO = m('open'), tA = m('afleg');
+    hide(closed, tO - .2, .3);
+    tw(wall, { 'a_fill-opacity': .2, c_stroke: COL.chalk }, tO, .7);
+    b_txt(p, 'TRANSPARANT OVER', 852, 336, tO + .3, { size: 16, fill: COL.dim, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '2');
+    show(b_chip(p, 852, 366, 456, 'de inrichting', { hgt: 64, size: 22 }), tO + .5);
+    show(b_chip(p, 852, 452, 456, 'de staat van de informatieveiligheid', { hgt: 64, size: 20 }), tO + 1.6);
+    // Accountability goes out; trust comes back.
+    b_arrow(p, 808, 332, 420, tA);
+    b_txt(p, 'verantwoording', 570, 398, tA, { size: 24, weight: 600 });
+    b_arrow(p, 332, 808, 510, tA + 1, { stroke: COL.good });
+    b_txt(p, 'vertrouwen', 570, 548, tA + 1, { size: 24, weight: 600, fill: COL.good });
+  }],
+
+  ['verantwoording', 'Verantwoording afleggen', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 9 · TRANSPARANTIE EN VERANTWOORDING');
+    b_rise(c4_card(p, 150, 390, 380, 120, 'overheidsorganisatie', ['legt verantwoording af']), .2);
+    // Through, to, and in.
+    [['kader', 220, 110, 'verantwoordingskaders', ['de kaders die voor de organisatie gelden'], null],
+      ['toez', 365, 110, 'toezichthoudende instanties', ['de instanties die voor haar relevant zijn'], 'loep'],
+      ['jaar', 510, 150, 'jaarverslag', [], 'doc']].forEach(([mark, y, hgt, title, subs, icon]) => {
+      const t0 = m(mark);
+      c4_link(p, 540, 450, 770, y + hgt / 2, t0);
+      const g = c4_card(p, 780, y, 660, hgt, title, subs, { icon, dy: mark === 'jaar' ? -30 : 0 });
+      if (mark === 'jaar') {                       // information security is a standard part of it
+        b_rect(g, 876, y + 84, 520, 44, { fill: COL.task, stroke: COL.task, rx: 5, 'fill-opacity': .14 });
+        T(g, 'informatieveiligheid: standaard onderdeel', { x: 892, y: y + 113, size: 20, fill: COL.task, weight: 600 });
+      }
+      b_rise(g, t0 + .3);
+    });
+  }],
+
+  ['inzicht', 'Elkaar inzicht geven', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 9 · TRANSPARANTIE EN VERANTWOORDING');
+    [[360, 'A'], [1240, 'B']].forEach(([x, name], i) => {
+      show(b_icon(p, 'overheid', { x, y: 420, s: 1.6, o: 0 }), .2 + i * .15);
+      b_txt(p, 'organisatie ' + name, x, 528, .3 + i * .15, { size: 24, fill: COL.dim });
+    });
+    const tD = m('deel'), tV = m('vvt');
+    b_txt(p, 'inzicht in de getroffen maatregelen', 800, 250, tD, { size: 32, weight: 600 });
+    b_arrow(p, 480, 1120, 390, tD + .3); b_arrow(p, 1120, 480, 470, tD + .6);
+    // The document that travels both ways. Beat 'q1' hides its name again: that is the question.
+    S.hint = [];
+    [[520, 1080, 348], [1080, 520, 512]].forEach(([x1, x2, y], i) => {
+      const d = G(p, { x: x1, y, o: 0 });
+      b_icon(d, 'doc', { s: .9 });
+      S.hint.push(T(d, 'VvT', { x: 30, y: 8, size: 20, weight: 700, font: MONO, o: 0 }));
+      show(d, tD + .8 + i * .3, .3);
+      tw(d, { x: x2 }, tD + .8 + i * .3, 2.4, io);
+      show(S.hint[i], tV);
+    });
+    S.hint.push(b_txt(p, 'de verklaring van toepasselijkheid', 800, 600, tV, { size: 28, weight: 600 }));
+  }],
+
+  ['q1', 'Controlevraag', () => { S.hint.forEach(e => hide(e, 0, .3)); }, { ask: done => quiz(WIDE, [{
+    id: 'c-inzicht', prompt: ['Waarmee geven overheidsorganisaties elkaar inzicht in hun maatregelen?'],
+    build: choice([['de verklaring van toepasselijkheid'], ['het risicoregister'], ['het jaarverslag']], 0,
+      'In de verklaring van toepasselijkheid staat welke maatregelen zijn geselecteerd en geïmplementeerd.',
+      [null, 'Het risicoregister bevat de tijdelijk geaccepteerde risico’s. Inzicht in de maatregelen geeft de verklaring van toepasselijkheid.',
+        'In het jaarverslag leg je verantwoording af. Onderling inzicht in de maatregelen geeft de verklaring van toepasselijkheid.'],
+      () => S.hint.forEach(e => fx(e, { o: 1 }, 0, .4))),
+  }], done) }],
+
+  ['toezicht', 'Toezicht', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 10 · TOEZICHT');
+    b_tab(2, .2);
+    show(b_icon(p, 'loep', { x: 1210, y: 380, s: 2.4, o: 0 }), .2);
+    b_txt(p, 'toezichthouder', 1210, 486, .3, { size: 26, weight: 600 });
+    // What the supervisor looks at: the duty of care, the BIO that fills it in, and the standards under the BIO.
+    const layer = (y, col, fill, title, sub, t0) => {
+      const g = G(p, { o: 0, y: 14 });
+      b_rect(g, 220, y, 640, 92, { fill, stroke: col });
+      T(g, title, { x: 540, y: y + (sub ? 40 : 55), size: 25, weight: 600, fill: col === COL.dim ? COL.chalk : col, anchor: 'middle', font: col === COL.iso ? MONO : UI });
+      if (sub) T(g, sub, { x: 540, y: y + 70, size: 19, fill: COL.dim, anchor: 'middle' });
+      b_rise(g, t0);
+    };
+    layer(290, COL.dim, COL.panel, 'zorgplicht uit de Cyberbeveiligingswet', null, m('zorg'));
+    layer(400, COL.task, COL.panel, 'BIO-aanpak', 'de basis om de zorgplicht in te vullen', m('zorg', .5));
+    layer(510, COL.iso, '#172028', 'NEN-EN-ISO/IEC 27001 en 27002', null, m('iso'));
+    b_arrow(p, 1108, 874, 446, m('toets'));
+    b_txt(p, 'toetst het managementsysteem', 1210, 536, m('toets'), { size: 22 });
+    b_txt(p, 'inclusief de overheidsmaatregelen', 1210, 568, m('ovm'), { size: 22, weight: 600, fill: COL.task });
+  }],
+
+  ['certificaat', 'Certificering', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 10 · TOEZICHT');
+    show(b_icon(p, 'certificaat', { x: 430, y: 380, s: 3.2, o: 0 }), .2);
+    b_txt(p, 'ISO 27001-certificaat', 430, 540, .3, { size: 28, weight: 600 });
+    // Mandatory? No.
+    const must = b_txt(p, 'verplicht?', 430, 592, .6, { size: 28 });
+    draw(path(p, 'M352 583H508', { stroke: COL.bad, 'stroke-width': 4 }, { d: 0 }), m('nee'), .4);
+    tw(must, { c_fill: COL.faint }, m('nee', .2), .4);
+    b_txt(p, 'niet verplicht', 430, 646, m('nee', .5), { size: 30, weight: 600 });
+    // But it helps.
+    b_txt(p, 'maar het helpt', 1070, 296, m('wel'), { size: 30, weight: 600, fill: COL.good });
+    b_rise(c4_card(p, 780, 330, 580, 96, 'vereenvoudigt de verantwoording'), m('v1'));
+    b_rise(c4_card(p, 780, 452, 580, 150, 'onafhankelijke beoordeling', ['de organisatie kan informatiebeveiliging', 'procesmatig uitvoeren']), m('v2'));
+  }],
+
+  ['nietalles', 'De BIO is niet alles', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 11 · OVERIGE NORMEN, WET- EN REGELGEVING');
+    b_tab(3, .2);
+    // The baseline at the bottom; more is stacked on top of it.
+    const block = (y, col, title, sub, t0, dash) => {
+      const g = G(p, { o: 0, y: 14 });
+      b_rect(g, 200, y, 660, 100, { fill: col === COL.task ? COL.task : COL.panel, stroke: col, 'fill-opacity': col === COL.task ? .14 : 1, ...(dash ? { 'stroke-dasharray': '8 7' } : {}) });
+      T(g, title, { x: 530, y: y + (sub ? 44 : 60), size: 24, weight: 600, fill: col === COL.task ? COL.task : COL.chalk, anchor: 'middle' });
+      if (sub) T(g, sub, { x: 530, y: y + 74, size: 19, fill: COL.dim, anchor: 'middle' });
+      b_rise(g, t0);
+    };
+    block(540, COL.task, 'de BIO', 'gemeenschappelijk basisniveau', .2);
+    b_txt(p, 'niet bedoeld om alle beveiligingseisen af te dekken', 530, 240, m('basis'), { size: 26, weight: 600 });
+    const tL = m('laag');
+    block(420, COL.chalk, 'aanvullende maatregelen van een overheidslaag', null, tL, true);
+    ['Rijk', 'provincies', 'gemeenten', 'waterschappen'].forEach((str, i) =>
+      show(b_chip(p, 930 + (i % 2) * 250, 420 + Math.floor(i / 2) * 54, 236, str, { hgt: 44, size: 19 }), tL + .6 + i * .15));
+    show(b_chip(p, 930, 534, 486, 'verplichtend of adviserend', { hgt: 46, size: 20, col: COL.chalk }), m('va'));
+    block(300, COL.chalk, 'eigen interne en externe eisen', 'waaronder wet- en regelgeving', m('zelf'));
+    b_txt(p, 'stelt de organisatie zelf vast', 930, 358, m('zelf', .5), { size: 24, anchor: 'start' });
+  }],
+
+  ['normen', 'Meer normen, één basis', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 11 · OVERIGE NORMEN, WET- EN REGELGEVING');
+    const tB = m('basis'), tE = m('een');
+    [[330, 'NEN 7510', 'zorginformatie', 'n1'], [800, 'NEN-EN-ISO 22301', 'bedrijfscontinuïteit en crisismanagement', 'n2'], [1270, 'CSIR', 'operationele technologie', 'n3']].forEach(([cx, code, sub, mark], i) => {
+      b_rise(b_code(p, cx, 240, code, sub, 420), m(mark));
+      b_down(p, cx, 330, 404, tB + .2 + i * .15, COL.iso);
+    });
+    // One foundation under all three.
+    const base = G(p, { o: 0, y: 14 });
+    b_rect(base, 120, 410, 1360, 96, { fill: '#172028', stroke: COL.iso });
+    T(base, 'NEN-EN-ISO/IEC 27001 en 27002', { x: 800, y: 454, size: 27, fill: COL.iso, weight: 700, anchor: 'middle', font: MONO });
+    T(base, 'dezelfde basis', { x: 800, y: 486, size: 19, anchor: 'middle' });
+    b_rise(base, tB);
+    // So they fit in one management system.
+    b_down(p, 800, 512, 576, tE);
+    const one = G(p, { o: 0, y: 14 });
+    b_rect(one, 360, 584, 880, 110, { fill: COL.panel, stroke: COL.task });
+    b_icon(one, 'kringloop', { x: 440, y: 639, s: 1.1, stroke: COL.task });
+    T(one, 'één managementsysteem voor informatiebeveiliging', { x: 860, y: 648, size: 27, weight: 600, anchor: 'middle' });
+    b_rise(one, tE + .3);
+  }],
+
+  ['cbw1', 'De wet: verplicht', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 11.1 · CYBERBEVEILIGINGSWET (CBW)');
+    b_txt(p, 'de BIO toepassen', 800, 226, .2, { size: 32, weight: 600 });
+    // Two routes to the same obligation: by law, and by self-regulation.
+    const area = (x, kick, title, size, dash, t0) => {
+      show(put(b_rect(p, x, 260, 590, 350, { fill: COL.task, stroke: COL.task, sw: 3, 'fill-opacity': dash ? .04 : .12, ...(dash ? { 'stroke-dasharray': '10 8' } : {}) }), { o: 0 }), .3);
+      b_txt(p, kick, x + 28, 306, t0, { size: 16, fill: COL.task, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '2');
+      b_txt(p, title, x + 28, 372, t0 + .2, { size, weight: 600, fill: COL.task, anchor: 'start' });
+    };
+    const tW = m('wet'), tZ = m('zelf');
+    area(180, 'SECTOR OVERHEID · ONDER DE CBW', 'wettelijk verplicht', 40, false, tW);
+    b_txt(p, 'voor de beveiliging van', 208, 430, tW + 1.5, { size: 24, anchor: 'start' });
+    b_txt(p, 'netwerk- en informatiesystemen', 208, 462, tW + 1.5, { size: 24, anchor: 'start' });
+    area(830, 'DAARBUITEN · BESLUIT OBDO', 'verplichtende zelfregulering', 36, true, tZ);
+    ['organisaties buiten de Cbw', 'maatregelen buiten de wet', 'informatie op papier'].forEach((str, i) =>
+      show(b_chip(p, 858, 410 + i * 56, 534, str, { hgt: 46, size: 20 }), m('vb') + i * .9));
+    b_txt(p, 'verplicht is de BIO hoe dan ook', 800, 694, m('dus'), { size: 32, weight: 600, fill: COL.task });
+  }],
+
+  ['bestuurder', 'De bestuurder', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 11.1 · CYBERBEVEILIGINGSWET (CBW)');
+    show(b_icon(p, 'persoon', { x: 300, y: 400, s: 2.6, o: 0 }), .2);
+    b_txt(p, 'bestuurder', 300, 546, .3, { size: 30, weight: 600 });
+    b_txt(p, 'VERANTWOORDELIJK', 300, 584, .7, { size: 17, fill: COL.task, weight: 700, font: MONO }).setAttribute('letter-spacing', '2');
+    [['treft', 'treft maatregelen', 'passend en evenredig: technisch, operationeel en organisatorisch'],
+      ['keurt', 'keurt de maatregelen goed', 'voor het beheer van cyberbeveiligingsrisico’s'],
+      ['ziet', 'ziet toe', 'op de kwaliteit van de uitvoering en het beheer van de maatregelen']].forEach(([mark, title, sub], i) => {
+      const y = 230 + i * 150, t0 = m(mark);
+      c4_link(p, 420, 420, 590, y + 60, t0);
+      b_rise(c4_card(p, 600, y, 830, 120, title, [sub], { size: 28 }), t0 + .3);
+    });
+  }],
+
+  ['cbw3', 'Opleiden, melden, toezicht', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 11.1 · CYBERBEVEILIGINGSWET (CBW)');
+    S.law = C4_LAW.map((part, i) => {
+      const x = C4_LX(i), cx = x + 210;
+      show(put(b_rect(p, x, 240, 420, 320, { fill: COL.panel }), { o: 0 }), .3 + i * .1);   // the three frames are there at once
+      const g = G(p, { o: 0 });
+      b_icon(g, part.icon, { x: cx, y: 318, s: 1.5 });
+      T(g, part.name, { x: cx, y: 412, size: 28, weight: 600, anchor: 'middle' });
+      part.lines.forEach((str, k) => T(g, str, { x: cx, y: 456 + k * 28, size: 21, fill: COL.dim, anchor: 'middle' }));
+      show(g, m(part.mark));
+      return g;
+    });
+  }],
+
+  ['q2', 'Controlevraag', () => {}, { ask: done => {
+    const items = C4_LAW.map((part, i) => ({ el: S.law[i], box: [C4_LX(i), 240, 420, 320], label: part.name }));
+    quiz(WIDE, [{
+      id: 'c-wet-1', prompt: ['Bij een waterschap worden bestanden gegijzeld en valt de dienstverlening stil. Welk punt uit de wet is nu direct aan de orde?'],
+      build: pickEls(items, 1, 'Een significant incident meld je tijdig, binnen de doorlooptijden.', i => [
+        'Opleiding helpt om zo’n incident te voorkomen en te herkennen. Nu het is gebeurd, geldt de meldplicht.', null,
+        'De toezichthouder ziet toe op de zorgplicht. De organisatie zelf moet het incident nu melden.'][i]),
+    }, {
+      id: 'c-wet-2', prompt: ['Een bestuurder volgt een cursus over het sturen op cyberrisico’s. Bij welk punt hoort dat?'],
+      build: pickEls(items, 0, 'Bestuurders zijn opgeleid en hebben de kennis om op risico’s te sturen.', i => [null,
+        'De meldplicht gaat over incidenten. Een cursus hoort bij opleiding.',
+        'Toezicht is de taak van de toezichthouder. Een cursus hoort bij opleiding.'][i]),
+    }, {
+      id: 'c-wet-3', prompt: ['De toezichthouder vraagt hoe de organisatie haar zorgplicht invult. Bij welk punt hoort dat?'],
+      build: pickEls(items, 2, 'De toezichthouder ziet toe op de invulling van de zorgplicht.', i => [
+        'Opleiding gaat over de kennis van bestuurders en medewerkers. Een vraag van de toezichthouder hoort bij toezicht.',
+        'De meldplicht gaat over incidenten. Een vraag van de toezichthouder hoort bij toezicht.', null][i]),
+    }], done);
+  } }],
+
+  ['wie', 'Wie houdt toezicht?', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 11.1 · CYBERBEVEILIGINGSWET (CBW)');
+    show(b_icon(p, 'loep', { x: 800, y: 236, s: 1.9, o: 0 }), .2);
+    b_txt(p, 'toezichthouder', 800, 322, .3, { size: 28, weight: 600 });
+    // Two supervisors, each with the source that names it. The BIO2 names the first; the second is the one for the water boards.
+    const who = (x, code, name, lines, source, t0) => {
+      draw(path(p, `M800 340V364H${x + 310}V396 M${x + 300} 382L${x + 310} 396L${x + 320} 382`, { stroke: COL.dim, 'stroke-width': 3 }, { d: 0 }), t0, .6);
+      const g = G(p, { o: 0, y: 14 });
+      b_rect(g, x, 404, 620, 270, { fill: COL.panel, stroke: COL.dim });
+      T(g, code, { x: x + 30, y: 470, size: 46, weight: 700, font: MONO });
+      T(g, name, { x: x + 30, y: 512, size: 23, weight: 600 });
+      lines.forEach((str, i) => T(g, str, { x: x + 30, y: 556 + i * 28, size: 21, fill: COL.dim }));
+      T(g, source, { x: x + 30, y: 656, size: 14, fill: COL.faint, weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+      b_rise(g, t0 + .3);
+    };
+    who(150, 'RDI', 'Rijksinspectie Digitale Infrastructuur', ['toezichthouder voor de sector Overheid'], 'BRON: BIO2 § 11.1', m('rdi'));
+    who(830, 'ILT', 'Inspectie Leefomgeving en Transport', ['overheden in de sectoren van het ministerie', 'van Infrastructuur en Waterstaat, onder andere', 'Rijkswaterstaat en de waterschappen'], 'BRON: ILENT.NL · TOEZICHT OP WEERBAARHEID', m('ilt'));
+  }],
+
+  ['wrap', 'Samenvatting', (m) => {
+    const p = panel(0);
+    b_head(p, 'SAMENVATTING');
+    hide(S.tabsG, 0, .4);
+    b_wrap(p, [
+      ['Informatiebeveiliging is een cyclisch proces.', 'Je blijft onderhouden, evalueren en verbeteren; het is geen eenmalig project.', 'w1'],
+      ['Transparant zijn en verantwoording afleggen.', 'Aan toezichthouders, in het jaarverslag, en onderling met de verklaring van toepasselijkheid.', 'w2'],
+      ['Certificering is niet verplicht, maar helpt wel.', 'Het vereenvoudigt de verantwoording en rust op een onafhankelijke beoordeling.', 'w3'],
+      ['Via de Cyberbeveiligingswet is de BIO verplicht.', 'De bestuurder is verantwoordelijk; daarbuiten geldt verplichtende zelfregulering.', 'w4'],
+    ], m);
+  }],
+
+  ['final1', 'Oefenronde 1', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-stellingen', prompt: ['Klopt het, of klopt het niet?'],
+    build: grid([
+      { parts: ['De BIO invoeren is een eenmalig project.'], ans: ['n'], why: 'Informatiebeveiliging is een cyclisch proces: je blijft evalueren en verbeteren.' },
+      { parts: ['Informatieveiligheid is een standaard onderdeel van het jaarverslag.'], ans: ['k'], why: 'Zo legt de organisatie verantwoording af.' },
+      { parts: ['De BIO verplicht een certificaat voor ISO 27001.'], ans: ['n'], why: 'Certificering is niet verplicht; ze helpt wel bij de verantwoording.' },
+      { parts: ['De BIO dekt alle beveiligingseisen van de overheid af.'], ans: ['n'], why: 'Dat is uitdrukkelijk niet de bedoeling: er kunnen aanvullende maatregelen en eigen eisen bij komen.' },
+      { parts: ['Voor informatie op papier geldt de BIO als verplichtende zelfregulering.'], ans: ['k'], why: 'De wet gaat over netwerk- en informatiesystemen; daarbuiten geldt verplichtende zelfregulering.' },
+    ], KN, { multi: false, text: true }),
+  }], done, 'Oefenronde 1 van 2') }],
+
+  ['final2', 'Oefenronde 2', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-aanleiding', prompt: ['Er komt nieuwe wetgeving. Wat doe je met je risicoanalyse en beheersmaatregelen?'],
+    build: choice([['Niets: de analyse geldt tot de volgende audit.'], ['Bijwerken waar dat nodig is.'], ['Opnieuw beginnen met een nieuw project.']], 1,
+      'Wijzigingen in wetgeving en nieuwe bedreigingen kunnen aanleiding geven om bij te werken.',
+      ['Een wijziging in wetgeving is juist een aanleiding om de risicoanalyse en de beheersmaatregelen bij te werken.', null,
+        'Het is geen project met een nieuw begin: je werkt bij binnen het managementsysteem dat er al is.']),
+  }, {
+    id: 'p-bestuurder', prompt: ['Wie is volgens de Cyberbeveiligingswet verantwoordelijk voor het treffen en goedkeuren van de maatregelen?'],
+    build: choice([['De bestuurder.'], ['De leverancier.'], ['De toezichthouder.']], 0,
+      'De bestuurder treft de maatregelen, keurt ze goed en ziet toe op de uitvoering.',
+      [null, 'Een leverancier kan diensten leveren, maar de verantwoordelijkheid ligt bij de bestuurder.',
+        'De toezichthouder ziet toe op de zorgplicht. Verantwoordelijk voor de maatregelen is de bestuurder.']),
+  }, {
+    id: 'p-melden', prompt: ['Er doet zich een significant incident voor. Wat vraagt de Cyberbeveiligingswet?'],
+    build: choice([['Melden bij het volgende jaarverslag.'], ['Alleen intern vastleggen.'], ['Tijdig melden, binnen de doorlooptijden die daarvoor gelden.']], 2,
+      'De organisatie is verantwoordelijk voor het tijdig melden van significante incidenten.',
+      ['Het jaarverslag is voor de verantwoording achteraf. Een significant incident meld je tijdig, binnen de doorlooptijden.',
+        'Intern vastleggen is niet genoeg: een significant incident meld je tijdig, binnen de doorlooptijden.', null]),
+  }], done, 'Oefenronde 2 van 2 · vraag') }],
+
+  ['finish', 'Afgerond', () => { panel(0); }, { ask: finishCard }],
+].map(([id, title, run, extra]) => ({ id, title, run, ...extra }));
+
+boot();
+</script>
+</body>
+</html>

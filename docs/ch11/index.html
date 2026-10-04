@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Continuïteit · BIO2 in beeld</title>
+<link rel="stylesheet" href="../lib/engine.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2314171a'/%3E%3Cpath d='M15 52V38M27 52V20M39 52V32M51 52V14' stroke='%238d959d' stroke-width='7'/%3E%3Cpath d='M7 28H57' stroke='%23c9a45c' stroke-width='4'/%3E%3C/svg%3E">
+<link rel="expect" href="#bar" blocking="render"><!-- hold the first frame until the player exists, so the page transition can run -->
+</head>
+<body>
+<script src="../lib/engine.js"></script>
+<script src="audio/nl/timings.js"></script>
+<script>
+'use strict';
+// Hoofdstuk 11: de overheidsmaatregelen 5.30.01 tot en met 5.36.01 van de BIO2 (pagina 21): continuïteitsplannen testen,
+// kritieke systemen, bewaartermijnen, het auditplan en de jaarlijkse In Control Verklaring. Three of the nine controls
+// are marked grey in the BIO2 (outside the Cyberbeveiligingswet): the first grey rows of part 2.
+// Beat ids match content/bio2/ch11/narration.nl.json. One idea per beat.
+const CHAPTER = { number: 11, title: 'Continuïteit, bewaren en verantwoorden', minutes: 6, language: 'nl', next: '../ch12/' };
+
+/* ---------- chapter data (used by the helpers and inside BEATS, so defined first) ---------- */
+const C11_TABS = ['5.29', '5.30', '5.31', '5.32', '5.33', '5.34', '5.35', '5.36', '5.37'];
+// Nine controls of ISO 27002 (topics shortened, in our own words) with their government measures in the BIO2.
+// grey: marked grey in the BIO2, so outside the Cyberbeveiligingswet and binding self-regulation.
+const C11_CTRL = [
+  { code: '5.29', topic: ['beveiliging tijdens', 'een verstoring'], nrs: [] },
+  { code: '5.30', topic: ['ICT gereed voor', 'bedrijfscontinuïteit'], nrs: ['5.30.01', '5.30.02'] },
+  { code: '5.31', topic: ['wettelijke en', 'contractuele eisen'], nrs: [] },
+  { code: '5.32', topic: ['intellectueel', 'eigendom'], nrs: [], grey: true },
+  { code: '5.33', topic: ['registraties', 'beschermen'], nrs: ['5.33.01'], grey: true },
+  { code: '5.34', topic: ['privacy en', 'persoonsgegevens'], nrs: [], grey: true },
+  { code: '5.35', topic: ['onafhankelijke', 'beoordeling'], nrs: ['5.35.02'], note: '5.35.01 vervallen' },
+  { code: '5.36', topic: ['naleving van beleid,', 'regels en normen'], nrs: ['5.36.01'] },
+  { code: '5.37', topic: ['bedieningsprocedures', 'vastgelegd'], nrs: [] },
+];
+const C11_GREY = '#3b4249';   // the grey of a marked row, on this dark stage
+// Three answers to 'how often' as cards for the first quick check.
+const C11_Q1 = [['elk jaar'], ['ten minste eens', 'per drie jaar'], ['periodiek']];
+const c11_q1X = i => 190 + i * 420;
+// The four controls that have government measures, as cards for the second quick check: [number, icon, label].
+const C11_Q2 = [['5.30', 'doorgaan', ['continuïteit']], ['5.33', 'db', ['bewaartermijnen']], ['5.35', 'loep', ['auditplan']], ['5.36', 'cert', ['rapporteren', 'en verklaren']]];
+const c11_q2X = i => 146 + i * 336;
+
+/* ---------- chapter drawing helpers (prefixed c11_; the shared b_ helpers live in ../lib/engine.js) ---------- */
+// The year ring with a marker that goes round once (b_yearly) started here and moved to the engine when chapter 13 needed it.
+// The heading of a grey-marked measure: from t0 its number chip is grey with a dashed frame, and a label says what
+// grey means (the dashed amber of chapters 4 and 6: binding self-regulation).
+const c11_greyKop = (p, kop, t0) => {
+  const chip = kop.firstChild;
+  chip.setAttribute('stroke-dasharray', '7 5');
+  tw(chip, { c_fill: C11_GREY }, t0, .6);
+  const g = G(p, { o: 0 });
+  b_caps(g, 'GRIJS GEMARKEERD', 1480, 172, { fill: COL.task, anchor: 'end' });
+  b_caps(g, 'VERPLICHTENDE ZELFREGULERING', 1480, 196, { fill: COL.task, anchor: 'end' });
+  show(g, t0);
+};
+// Tab i of the strip turns grey at t0, like its row in the table of the BIO2.
+const c11_greyTab = (i, t0) => {
+  const f = S.tabs[i].frame, a = k => +f.getAttribute(k);
+  show(put(mk('rect', { x: a('x'), y: a('y'), width: a('width'), height: a('height'), rx: 5, fill: COL.dim, 'fill-opacity': .28 }, S.tabsG), { o: 0 }), t0);
+};
+
+/* ---------- beats: [id, title, run(m, D), { ask, hold }?] ---------- */
+const BEATS = [
+  ['intro', 'Continuïteit', (m, D) =>
+    b_title(m, D, 'DEEL B · MAATREGELEN VOOR DE ORGANISATIE · HOOFDSTUK 11', 'Continuïteit', 'En verder: bewaren, beoordelen en verantwoorden.')],
+
+  ['negen', '5.29 tot en met 5.37', (m) => {
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 5.29 TOT EN MET 5.37');
+    // The strip of this chapter: the nine controls. Those without a government measure get a dashed frame.
+    b_tabs(C11_TABS, .4);
+    C11_CTRL.forEach((c, i) => { if (!c.nrs.length) b_tabNone(i); });
+    const tV = m('vier'), tG = m('geen');
+    let withNr = 0, without = 0;
+    // Three rows of three; the middle row is the one that is marked grey (next beat).
+    S.tiles = C11_CTRL.map((c, i) => {
+      const x = 120 + (i % 3) * 364, y = 150 + Math.floor(i / 3) * 186, g = G(p, { o: 0, y: 12 });
+      const frame = b_rect(g, x, y, 350, 170, { fill: COL.panel });
+      T(g, c.code, { x: x + 20, y: y + 48, size: 32, fill: COL.iso, weight: 700, font: MONO });
+      c.topic.forEach((str, k) => T(g, str, { x: x + 118, y: y + 36 + k * 25, size: 19 }));
+      tw(g, { o: 1, y: 0 }, .3 + i * .08, .5, out);
+      if (c.nrs.length) {
+        const t0 = tV + .2 + withNr++ * .25;
+        c.nrs.forEach((nr, k) => show(b_chip(g, x + 20 + k * 122, y + 100, 112, nr, { col: COL.task, fill: COL.task, hgt: 40, size: 16 }), t0 + k * .1));
+        if (c.note) show(T(g, c.note, { x: x + 146, y: y + 125, size: 14, fill: COL.dim, font: MONO, o: 0 }), t0 + .6);
+      } else {
+        const t0 = tG + .2 + without++ * .15;
+        show(T(g, 'geen overheidsmaatregel', { x: x + 20, y: y + 100, size: 14, fill: COL.dim, font: MONO, o: 0 }), t0);
+        show(b_chip(g, x + 20, y + 112, 196, 'richtlijn ISO 27002', { col: COL.iso, fill: COL.iso, hgt: 38, size: 15 }), t0 + 1.4);
+      }
+      return { g, frame, grey: !!c.grey };
+    });
+    b_txt(p, 'BRON ONDERWERPEN: NEN-EN-ISO/IEC 27002:2022 · VERKORT WEERGEGEVEN', 120, 740, 1.6, { size: 14, fill: COL.faint, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    const sum = S.sum = G(p, { o: 0 });
+    T(sum, 'samen vijf', { x: 1356, y: 410, size: 25, weight: 600, fill: COL.task, anchor: 'middle' });
+    T(sum, 'overheidsmaatregelen', { x: 1356, y: 444, size: 25, weight: 600, fill: COL.task, anchor: 'middle' });
+    show(sum, tV + 1.6);
+  }],
+
+  ['grijs', 'Grijs gemarkeerd', (m) => {
+    // Same picture: the middle row is marked grey in the BIO2. Grey means outside the Cyberbeveiligingswet, so
+    // binding self-regulation: the dashed amber frame of chapters 4 and 6, here on real rows for the first time.
+    const p = S.panel, tG = m('grijs'), tB = m('buiten'), tZ = m('zelf'), tD = m('dus');
+    hide(S.sum, 0, .4);
+    S.tiles.forEach((t, i) => {
+      if (t.grey) { tw(t.frame, { c_fill: C11_GREY }, tG + (i - 3) * .2, .6); c11_greyTab(i, tG + (i - 3) * .2); }
+      else tw(t.g, { o: .35 }, tG + .9, .6);
+    });
+    show(put(b_caps(p, 'GRIJS GEMARKEERD', 1232, 376), { o: 0 }), tG + .4);
+    show(put(b_rect(p, 110, 326, 1098, 190, { fill: COL.task, 'fill-opacity': .04, stroke: COL.task, sw: 3, 'stroke-dasharray': '10 8' }), { o: 0 }), tB);
+    show(put(b_caps(p, 'NIET ONDER DE CBW', 1232, 402, { fill: COL.task }), { o: 0 }), tB + .3);
+    b_txt(p, 'verplichtende', 1232, 450, tZ, { size: 31, weight: 600, fill: COL.task, anchor: 'start' });
+    b_txt(p, 'zelfregulering', 1232, 488, tZ, { size: 31, weight: 600, fill: COL.task, anchor: 'start' });
+    b_txt(p, 'verplicht blijven ze dus', 1232, 548, tD, { size: 21, weight: 600, anchor: 'start' });
+  }],
+
+  ['testen', 'Plannen testen', (m) => {
+    const p = panel(0);
+    b_head(p, '5.30.01 · CONTINUÏTEITSPLANNEN');
+    b_tab(1, .2);
+    b_kop(p, '5.30.01', 'continuïteitsplannen testen');
+    const tP = m('pe'), tJ = m('jaar'), tW = m('w'), tV = m('verb');
+    // The plans: more than one, so two sheets.
+    b_rise(b_sheet(p, 520, 262, 380, 250, ''), .3);
+    b_rise(b_sheet(p, 496, 286, 380, 250, 'CONTINUÏTEITSPLANNEN', 3), .4);
+    // The process owner tests them, every year.
+    show(b_role(p, 250, 380, 'proceseigenaar', COL.task), tP);
+    b_arrow(p, 316, 482, 380, tP + .3, { stroke: COL.task });
+    b_txt(p, 'test', 398, 362, tP + .3, { size: 21, weight: 600, fill: COL.task });
+    b_down(p, 250, 482, 534, tJ, COL.task);
+    b_yearly(p, 250, 622, 72, tJ);
+    // On three things, each on its word.
+    show(put(b_caps(p, 'GETEST OP', 1010, 290), { o: 0 }), tW - .2);
+    b_arrow(p, 912, 996, 411, tW - .2);
+    [['w', 'werking'], ['v', 'volledigheid'], ['a', 'actualiteit']].forEach(([mark, str], k) => {
+      const y = 304 + k * 76;
+      show(b_box(p, 1010, y, 300, [str], { hgt: 62 }), m(mark));
+      show(put(b_tick(p, 1346, y + 31), { o: 0 }), m(mark) + .3);
+    });
+    // What it is for: better plans.
+    draw(path(p, 'M1160 530V600H686V548 M676 562L686 548L696 562', { stroke: COL.task, 'stroke-width': 3 }, { d: 0 }), tV, .9);
+    b_txt(p, 'om de plannen te verbeteren', 923, 640, tV + .3, { size: 23, weight: 600, fill: COL.task });
+  }],
+
+  ['kritiek', 'Kritieke systemen', (m) => {
+    const p = panel(0);
+    b_head(p, '5.30.02 · KRITIEKE SYSTEMEN');
+    b_kop(p, '5.30.02', 'kritieke systemen');
+    const tI = m('inv'), tK = m('krit'), tM = m('meth'), tA = m('afw');
+    // The inventory of control 5.12, schematic: five systems.
+    const list = b_sheet(p, 120, 250, 620, 420, 'INVENTARISATIE');
+    b_caps(list, 'SCHEMATISCH', 712, 652, { fill: COL.faint, anchor: 'end' });
+    const rows = 'ABCDE'.split('').map((ch, k) => {
+      const y = 318 + k * 62, frame = b_rect(list, 148, y, 564, 50, { fill: COL.board, rx: 6 });
+      T(list, 'systeem ' + ch, { x: 172, y: y + 33, size: 21 });
+      return { frame, y };
+    });
+    b_rise(list, .3);
+    show(b_chip(p, 440, 262, 272, 'beheersmaatregel 5.12', { col: COL.iso, fill: COL.iso, hgt: 40, size: 16 }), tI);
+    // The process owner establishes which of them are critical.
+    show(b_role(p, 1100, 330, 'proceseigenaar', COL.task), tK - .4);
+    show(b_dart(p, 1040, 340, 754, 400, { stroke: COL.task }), tK);
+    [1, 3].forEach((k, n) => {
+      const { frame, y } = rows[k], t0 = tK + .4 + n * .5;
+      tw(frame, { c_stroke: COL.task }, t0, .4);
+      show(b_chip(p, 580, y + 7, 116, 'kritiek', { col: COL.task, fill: COL.task, hgt: 36, size: 16 }), t0);
+    });
+    // On what basis: the adopted method for risk management, and an explicit weighing of risks.
+    const basis = S.basis = G(p);
+    show(put(b_caps(basis, 'OP BASIS VAN', 820, 478), { o: 0 }), tM - .2);
+    show(b_box(basis, 820, 492, 600, ['vastgestelde risicomanagementmethodiek'], { hgt: 64, size: 22 }), tM);
+    show(b_box(basis, 820, 572, 600, ['expliciete risicoafweging'], { hgt: 64, size: 22 }), tA);
+    show(put(b_matrix(basis, 1372, 604, .7), { o: 0 }), tA);
+  }],
+
+  ['actueel', 'Actueel houden', (m) => {
+    // Same picture: the overview is kept up to date, at least once in three years.
+    const p = S.panel, tD = m('drie'), x0 = 850, step = 160;
+    hide(S.basis, 0, .4);
+    show(put(b_caps(p, 'DIT OVERZICHT ACTUALISEREN', x0, 506), { o: 0 }), .5);
+    show(b_years(p, x0, 560, step), .5);
+    [0, 3].forEach((k, n) => show(put(mk('circle', { cx: x0 + k * step, cy: 560, r: 10, fill: COL.task }, p), { o: 0 }), tD + .4 + n * 1.2));
+    b_txt(p, 'ten minste eens per drie jaar', x0 + step * 1.5, 668, tD + .6, { size: 25, weight: 600, fill: COL.task });
+  }],
+
+  ['bewaartermijn', 'Bewaartermijnen', (m) => {
+    const p = panel(0);
+    b_head(p, '5.33.01 · BEWAARTERMIJNEN');
+    b_tab(4, .2);
+    c11_greyKop(p, b_kop(p, '5.33.01', 'bewaartermijnen: vastgelegd en ingeregeld'), m('grijs'));
+    const tL = m('lijst'), tT = m('term'), tD = m('doel'), tW = m('wet');
+    // The selection lists (more than one, so two sheets), schematic: for each kind of information or system, how long it is kept.
+    b_rise(b_sheet(p, 436, 244, 540, 380, ''), .3);
+    const list = b_sheet(p, 412, 268, 540, 380, 'SELECTIELIJSTEN');
+    b_caps(list, 'SCHEMATISCH', 924, 308, { fill: COL.faint, anchor: 'end' });
+    b_caps(list, 'INFORMATIE OF SYSTEEM', 440, 356, { size: 14 });
+    b_caps(list, 'BEWAARTERMIJN', 700, 356, { size: 14 });
+    ['informatie A', 'informatie B', 'systeem C', 'systeem D'].forEach((str, k) => {
+      const y = 372 + k * 62;
+      b_rect(list, 440, y, 484, 50, { fill: COL.board, rx: 6 });
+      T(list, str, { x: 460, y: y + 33, size: 21 });
+      show(put(mk('rect', { x: 700, y: y + 18, width: [120, 196, 70, 156][k], height: 14, rx: 4, fill: COL.task }, p), { o: 0 }), tT + .2 + k * .3);
+    });
+    b_rise(list, .4);
+    show(b_role(p, 230, 420, 'proceseigenaar', COL.task), tL);
+    b_arrow(p, 296, 398, 420, tL + .4, { stroke: COL.task });
+    // What the terms take into account.
+    const rek = S.rek = G(p);
+    show(put(b_caps(rek, 'REKENING HOUDEND MET', 1040, 300), { o: 0 }), tD - .2);
+    b_arrow(rek, 1030, 988, 380, tD);
+    show(b_box(rek, 1040, 316, 440, ['eigen bedrijfsdoelstellingen'], { hgt: 64, size: 22 }), tD);
+    show(b_box(rek, 1040, 396, 440, ['wet- en regelgeving'], { hgt: 64, size: 22 }), tW);
+    b_txt(rek, 'zoals de Archiefwet', 1040, 496, tW + 1.5, { size: 21, fill: COL.dim, anchor: 'start' });
+    b_txt(rek, 'en privacywetgeving', 1040, 524, tW + 1.5, { size: 21, fill: COL.dim, anchor: 'start' });
+  }],
+
+  ['ingeregeld', 'Praktisch ingeregeld', (m) => {
+    // Same picture: the terms are also put into practice, and that is checked from time to time (no interval is named).
+    const p = S.panel, tP = m('prak'), tT = m('toets');
+    hide(S.rek, 0, .4);
+    b_arrow(p, 990, 1030, 348, tP, { stroke: COL.task });
+    show(b_box(p, 1040, 316, 440, ['termijnen praktisch ingeregeld'], { col: COL.task, fill: COL.task, hgt: 64, size: 22 }), tP);
+    show(put(b_caps(p, 'PERIODIEK', 1040, 470, { fill: COL.task }), { o: 0 }), tT);
+    show(put(path(p, 'M1040 510H1480', { stroke: COL.edge, 'stroke-width': 3 }), { o: 0 }), tT);
+    [0, 1, 2, 3].forEach(k => show(put(mk('circle', { cx: 1084 + k * 118, cy: 510, r: 9, fill: COL.task }, p), { o: 0 }), tT + .3 + k * .3));
+    b_txt(p, 'toetsen of het werkt', 1040, 566, tT + .4, { size: 23, weight: 600, anchor: 'start' });
+  }],
+
+  ['q1', 'Controlevraag', () => {
+    // Three answers to 'how often' as cards to point at: every year, at least once in three years, periodically.
+    const p = panel(0);
+    b_head(p, '5.30 EN 5.33 · HOE VAAK');
+    b_tab(-1, .2);
+    b_txt(p, 'hoe vaak gebeurt het', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.cards = C11_Q1.map((lines, i) => {
+      const x = c11_q1X(i), cx = x + 190, g = b_tile(p, { x, y: 264, w: 380, h: 250, lines, size: 22, textY: lines.length > 1 ? 446 : 460 });
+      if (i === 0) {
+        put(b_year(g, cx, 352, 54, ''), { o: 1 });
+        mk('circle', { cx, cy: 298, r: 9, fill: COL.task }, g);
+      } else {
+        path(g, `M${x + 50} 352H${x + 330}`, { stroke: COL.edge, 'stroke-width': 3 });
+        if (i === 1) ['nu', '1', '2', '3 jaar'].forEach((str, k) => {
+          path(g, `M${x + 70 + k * 80} 342V362`, { stroke: COL.dim, 'stroke-width': 3 });
+          T(g, str, { x: x + 70 + k * 80, y: 392, size: 16, fill: COL.dim, anchor: 'middle', font: MONO });
+        });
+        (i === 1 ? [70, 310] : [84, 154, 224, 294]).forEach(dx => mk('circle', { cx: x + dx, cy: 352, r: 9, fill: COL.task }, g));
+      }
+      b_rise(g, .3 + i * .1);
+      return g;
+    });
+  }, { ask: done => {
+    const items = S.cards.map((g, i) => ({ el: g, box: [c11_q1X(i), 264, 380, 250], label: C11_Q1[i].join(' ') }));
+    quiz(WIDE, [{
+      id: 'c-vaak-1', prompt: ['Hoe vaak test de proceseigenaar de continuïteitsplannen?'],
+      build: pickEls(items, 0, '5.30.01: jaarlijks, op werking, volledigheid en actualiteit.', i => [null,
+        'Dat geldt voor het overzicht van kritieke systemen. De continuïteitsplannen worden elk jaar getest.',
+        'Hier noemt de maatregel een termijn: de continuïteitsplannen worden elk jaar getest.'][i]),
+    }, {
+      id: 'c-vaak-2', prompt: ['Hoe vaak wordt het overzicht van kritieke systemen geactualiseerd?'],
+      build: pickEls(items, 1, '5.30.02: ten minste eens per drie jaar, door de proceseigenaar.', i => [
+        'Elk jaar geldt voor het testen van de continuïteitsplannen. Het overzicht: ten minste eens per drie jaar.', null,
+        'Hier noemt de maatregel een termijn: ten minste eens per drie jaar.'][i]),
+    }, {
+      id: 'c-vaak-3', prompt: ['Hoe vaak toetst de proceseigenaar of de bewaartermijnen werken?'],
+      build: pickEls(items, 2, '5.33.01: periodiek. Een vaste termijn noemt de maatregel hier niet.', i => [
+        'Elk jaar geldt voor de continuïteitsplannen. Bij de bewaartermijnen zegt de maatregel: periodiek.',
+        'Drie jaar geldt voor het overzicht van kritieke systemen. Bij de bewaartermijnen zegt de maatregel: periodiek.', null][i]),
+    }], done);
+  } }],
+
+  ['auditplan', 'Het auditplan', (m) => {
+    const p = panel(0);
+    b_head(p, '5.35.02 · AUDITPLAN');
+    b_tab(6, .2);
+    b_kop(p, '5.35.02', 'een vastgesteld auditplan');
+    const tP = m('plan'), tV = m('vast'), tJ = m('jaar'), tK = m('keuze');
+    // The plan as a grid, schematic: systems down, kinds of security audit across.
+    const plan = b_sheet(p, 520, 250, 800, 420, 'AUDITPLAN');
+    b_caps(plan, 'SCHEMATISCH', 1292, 652, { fill: COL.faint, anchor: 'end' });
+    b_caps(plan, 'SOORT BEVEILIGINGSAUDIT', 1040, 318, { anchor: 'middle' });
+    [0, 1, 2].forEach(c => T(plan, 'soort ' + (c + 1), { x: 900 + c * 140, y: 346, size: 16, fill: COL.dim, anchor: 'middle', font: MONO }));
+    'ABCD'.split('').forEach((ch, r) => {
+      const y = 364 + r * 66;
+      T(plan, 'systeem ' + ch, { x: 552, y: y + 30, size: 21 });
+      [0, 1, 2].forEach(c => b_rect(plan, 878 + c * 140, y, 44, 44, { fill: COL.board, rx: 5 }));
+    });
+    b_rise(plan, tP);
+    // One number of this control has lapsed; the table of the BIO2 says so.
+    show(b_chip(p, 120, 250, 250, '5.35.01 · vervallen', { hgt: 40, size: 16, fill: COL.dim }), m('verv'));
+    // It is adopted: the stamp lands on it.
+    const stamp = b_stamp(p, 300, 470, 'VASTGESTELD');
+    show(stamp, tV, .3); tw(stamp, { x: 1196, y: 256 }, tV + .4, .9, io);
+    // Every year the choices are made: which kind of audit for which systems.
+    b_yearly(p, 300, 470, 84, tJ);
+    b_arrow(p, 400, 506, 470, tJ + .4, { stroke: COL.task });
+    b_txt(p, 'keuzes', 453, 452, tJ + .4, { size: 21, weight: 600, fill: COL.task });
+    [[0, 0], [0, 2], [1, 1], [2, 0], [3, 1], [3, 2]].forEach(([r, c], n) =>
+      show(put(b_tick(p, 900 + c * 140, 386 + r * 66, COL.task), { o: 0 }), tK + .3 + n * .3));
+  }],
+
+  ['rapporteren', 'Rapporteren', (m, D) => {
+    const p = panel(0);
+    b_head(p, '5.36.01 · RAPPORTEREN');
+    b_tab(7, .2);
+    b_kop(p, '5.36.01', 'rapporteren over informatiebeveiliging');
+    const tPc = m('pc'), tPd = m('pdca'), tC = m('ciso'), R = 78;
+    // Two cycles, each a ring with a point that keeps going round.
+    const cycle = (cy, t0, letters) => {
+      const g = G(p, { o: 0 });
+      mk('circle', { cx: 220, cy, r: R, fill: 'none', stroke: COL.task, 'stroke-width': 3 }, g);
+      [...letters].forEach((ch, k) => T(g, ch, { x: 220 + [0, 52, 0, -52][k], y: cy + [-46, 6, 58, 6][k], size: 17, fill: COL.dim, weight: 700, anchor: 'middle', font: MONO }));
+      show(g, t0);
+      const dot = G(p, { o: 0 });
+      mk('circle', { r: 8, fill: COL.task }, dot);
+      prog(q => { const a = q * (D - t0) * .9; put(dot, { x: 220 + R * Math.sin(a), y: cy - R * Math.cos(a), o: 1 }); }, t0 + .3, D - t0 - .3, lin);
+      return g;
+    };
+    cycle(350, tPc, '');
+    b_txt(p, 'P&C-cyclus', 330, 346, tPc, { size: 27, weight: 600, anchor: 'start' });
+    b_txt(p, 'planning en control', 330, 378, tPc, { size: 20, fill: COL.dim, anchor: 'start' });
+    cycle(580, tPd, 'PDCA');
+    b_txt(p, 'PDCA-cyclus', 330, 556, tPd, { size: 27, weight: 600, anchor: 'start' });
+    show(b_term(p, 'Plan-do-check-act', 'plan-do-check-act', { x: 330, y: 592, size: 21 }), tPd + .3);
+    b_txt(p, 'plannen, uitvoeren, controleren, bijsturen', 330, 624, tPd + .8, { size: 19, fill: COL.dim, anchor: 'start' });
+    // Both lead to reporting on information security.
+    b_rise(b_sheet(p, 900, 300, 480, 230, 'RAPPORTAGE INFORMATIEBEVEILIGING', 3), .4);
+    show(b_dart(p, 620, 352, 886, 400), tPc + .6);
+    show(b_dart(p, 760, 584, 886, 468), tPd + .6);
+    // The CISO coordinates it.
+    show(b_role(p, 1140, 648, 'CISO', COL.task), tC);
+    show(b_dart(p, 1140, 592, 1140, 544, { stroke: COL.task }), tC + .2);
+    b_txt(p, 'coördineert', 1168, 576, tC + .3, { size: 21, weight: 600, fill: COL.task, anchor: 'start' });
+  }, { hold: true }],   // the lesson waits here: the English term can be heard before it goes on
+
+  ['icv', 'De In Control Verklaring', (m) => {
+    const p = panel(0);
+    b_head(p, '5.36.01 · IN CONTROL VERKLARING');
+    b_kop(p, '5.36.01', 'elk jaar een verklaring');
+    const tI = m('icv'), tO = m('of'), tH = m('heel');
+    // From the reporting, once a year, comes a statement.
+    b_rise(b_sheet(p, 100, 310, 260, 180, 'RAPPORTAGE', 2), .3);
+    b_arrow(p, 370, 404, 400, .6);
+    b_yearly(p, 480, 400, 58, .5, 1.6);
+    b_arrow(p, 556, 590, 400, tI);
+    const icv = G(p, { o: 0, y: 14 });
+    b_rect(icv, 600, 280, 480, 240, { fill: COL.panel, stroke: COL.task, sw: 3 });
+    b_caps(icv, 'ICV', 628, 322, { fill: COL.task, size: 17 });
+    T(icv, 'In Control Verklaring', { x: 628, y: 372, size: 33, weight: 600, fill: COL.task });
+    b_icon(icv, 'cert', { x: 1022, y: 458, s: .9, stroke: COL.task });
+    b_rise(icv, tI);
+    b_txt(p, 'of een vergelijkbaar instrument', 628, 420, tO, { size: 22, fill: COL.dim, anchor: 'start' });
+    show(b_box(p, 600, 548, 480, ['over de gehele informatiebeveiliging', 'van de organisatie'], { col: COL.task, fill: COL.task, hgt: 96, size: 21 }), tH);
+  }],
+
+  ['formeel', 'Formele verantwoording', (m) => {
+    // Same picture: the statement can also be part of the formal accountability. 'Can': a dashed arrow and a dashed place.
+    const p = S.panel, tK = m('kan'), tH = m('h4');
+    const acc = b_sheet(p, 1180, 280, 320, 240, 'FORMELE VERANTWOORDING', 2);
+    b_rect(acc, 1208, 410, 264, 70, { stroke: COL.dim, rx: 6, 'stroke-dasharray': '8 7' });
+    b_rise(acc, .3);
+    show(b_dart(p, 1092, 400, 1168, 400, { stroke: COL.task, dash: true }), tK);
+    b_txt(p, 'kan', 1130, 380, tK, { size: 21, weight: 600, fill: COL.task });
+    const chip = put(b_chip(p, 1220, 422, 240, 'ICV of vergelijkbaar', { col: COL.task, fill: COL.task, hgt: 46, size: 16, bg: COL.panel }), { x: -420 });
+    show(chip, tK + .5, .3); tw(chip, { x: 0 }, tK + .7, 1, io);
+    b_txt(p, 'kan er ook onderdeel van zijn', 1340, 564, tK + 1.8, { size: 21, weight: 600, fill: COL.task });
+    show(put(b_caps(p, 'ZIE OOK HOOFDSTUK 4', 1340, 602, { anchor: 'middle' }), { o: 0 }), tH);
+  }],
+
+  ['q2', 'Controlevraag', () => {
+    // The four controls of this chapter that have government measures, as cards to point at.
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 5.29 TOT EN MET 5.37');
+    b_tab(-1, .2);
+    b_txt(p, 'de vier beheersmaatregelen met overheidsmaatregelen', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.cards = C11_Q2.map(([nr, icon, lines], i) => {
+      const x = c11_q2X(i), g = b_tile(p, { x, y: 264, w: 300, h: 250, icon, lines, iconY: 112, iconS: 1.05, size: 21 });
+      T(g, nr, { x: x + 150, y: 312, size: 26, fill: COL.task, weight: 700, anchor: 'middle', font: MONO });
+      b_rise(g, .3 + i * .1);
+      return g;
+    });
+  }, { ask: done => {
+    const items = S.cards.map((g, i) => ({ el: g, box: [c11_q2X(i), 264, 300, 250], label: C11_Q2[i][0] + ' ' + C11_Q2[i][2].join(' ') }));
+    const about = ['Dat gaat over continuïteitsplannen en kritieke systemen.', 'Dat gaat over bewaartermijnen.', 'Dat gaat over het auditplan.', 'Dat gaat over rapporteren en de In Control Verklaring.'];
+    quiz(WIDE, [{
+      id: 'c-geldt-1', prompt: ['Het plan voor uitval van het zaaksysteem is twee jaar niet getest. Welke maatregel geldt?'],
+      build: pickEls(items, 0, '5.30.01: de proceseigenaar test continuïteitsplannen jaarlijks op werking, volledigheid en actualiteit.',
+        i => about[i] + ' Het testen van continuïteitsplannen staat in 5.30.01.'),
+    }, {
+      id: 'c-geldt-2', prompt: ['Een afdeling vraagt hoe lang vergunningdossiers bewaard blijven. Welke maatregel regelt dat?'],
+      build: pickEls(items, 1, '5.33.01: de proceseigenaar heeft de bewaartermijn vastgelegd in selectielijsten.',
+        i => about[i] + ' Bewaartermijnen staan in 5.33.01.'),
+    }, {
+      id: 'c-geldt-3', prompt: ['De directie wil elk jaar een verklaring over de hele informatiebeveiliging. Welke maatregel?'],
+      build: pickEls(items, 3, '5.36.01: het rapporteren resulteert in een jaarlijkse In Control Verklaring, of een vergelijkbaar instrument.',
+        i => about[i] + ' De jaarlijkse verklaring staat in 5.36.01.'),
+    }], done);
+  } }],
+
+  ['wrap', 'Samenvatting', (m) => {
+    const p = panel(0);
+    b_head(p, 'SAMENVATTING');
+    hide(S.tabsG, 0, .4);
+    b_wrap(p, [
+      ['De proceseigenaar test continuïteitsplannen elk jaar.', 'Op werking, volledigheid en actualiteit. Kritieke systemen: ten minste eens per drie jaar.', 'w1'],
+      ['Bewaartermijnen staan in selectielijsten.', 'Praktisch ingeregeld en periodiek getoetst. Grijs: verplichtende zelfregulering.', 'w2'],
+      ['Een vastgesteld auditplan.', 'Elk jaar de keuze: voor welke systemen welk soort beveiligingsaudit.', 'w3'],
+      ['Elk jaar een In Control Verklaring.', 'Of een vergelijkbaar instrument; de CISO coördineert de rapportage.', 'w4'],
+    ], m);
+  }],
+
+  ['final1', 'Oefenronde 1', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-stellingen', prompt: ['Klopt het, of klopt het niet?'],
+    build: grid([
+      { parts: ['De continuïteitsplannen worden eens per drie jaar getest.'], ans: ['n'], why: 'De proceseigenaar test ze jaarlijks. Drie jaar geldt voor het overzicht van kritieke systemen.' },
+      { parts: ['Een grijs gemarkeerde overheidsmaatregel is niet verplicht.'], ans: ['n'], why: 'Grijs betekent: niet onder de Cyberbeveiligingswet. Daarvoor geldt verplichtende zelfregulering.' },
+      { parts: ['Het auditplan zegt elk jaar welke systemen welk soort beveiligingsaudit krijgen.'], ans: ['k'], why: 'En dat auditplan is vastgesteld.' },
+      { parts: ['De In Control Verklaring, of een vergelijkbaar instrument, wordt jaarlijks afgegeven.'], ans: ['k'], why: 'En gaat over de gehele informatiebeveiliging van de organisatie.' },
+      { parts: ['Een bewaartermijn vastleggen in een selectielijst is genoeg.'], ans: ['n'], why: 'De proceseigenaar heeft de termijnen ook praktisch ingeregeld en toetst periodiek de werking.' },
+    ], KN, { multi: false, text: true }),
+  }], done, 'Oefenronde 1 van 2') }],
+
+  ['final2', 'Oefenronde 2', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-testen', prompt: ['Waarop test de proceseigenaar de continuïteitsplannen?'],
+    build: choice([['Op werking, volledigheid en actualiteit.'], ['Op opzet, bestaan en werking.'], ['Alleen op actualiteit.']], 0,
+      'Elk jaar, om de plannen te verbeteren.',
+      [null, 'Opzet, bestaan en werking toon je aan bij een maatregel (hoofdstuk 2). De plannen worden getest op werking, volledigheid en actualiteit.',
+        'Actualiteit is er één van. De andere twee zijn werking en volledigheid.']),
+  }, {
+    id: 'p-termijn', prompt: ['Waarmee houdt de proceseigenaar rekening bij een bewaartermijn?'],
+    build: choice([['Alleen met de Archiefwet.'], ['Met de eigen bedrijfsdoelstellingen en met wet- en regelgeving.'], ['Met de wensen van de leverancier.']], 1,
+      'Bij wet- en regelgeving noemt de maatregel de Archiefwet en privacywetgeving als voorbeelden.',
+      ['De Archiefwet is een voorbeeld. De maatregel noemt de eigen bedrijfsdoelstellingen en wet- en regelgeving.', null,
+        'Die noemt de maatregel niet. Het gaat om de eigen bedrijfsdoelstellingen en om wet- en regelgeving.']),
+  }, {
+    id: 'p-ciso', prompt: ['Wie coördineert het rapporteren over informatiebeveiliging?'],
+    build: choice([['De proceseigenaar.'], ['De toezichthouder.'], ['De CISO.']], 2,
+      'In de P&C-cyclus en als onderdeel van de PDCA-cyclus, met elk jaar een In Control Verklaring of een vergelijkbaar instrument.',
+      ['De proceseigenaar test de plannen en legt de bewaartermijnen vast. Het rapporteren coördineert de CISO.',
+        'De toezichthouder houdt toezicht op de organisatie. Het rapporteren coördineert de CISO.', null]),
+  }], done, 'Oefenronde 2 van 2 · vraag') }],
+
+  ['finish', 'Afgerond', () => { panel(0); }, { ask: finishCard }],
+].map(([id, title, run, extra]) => ({ id, title, run, ...extra }));
+
+boot();
+</script>
+</body>
+</html>

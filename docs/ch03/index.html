@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Risico’s in vijf stappen · BIO2 in beeld</title>
+<link rel="stylesheet" href="../lib/engine.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2314171a'/%3E%3Cpath d='M15 52V38M27 52V20M39 52V32M51 52V14' stroke='%238d959d' stroke-width='7'/%3E%3Cpath d='M7 28H57' stroke='%23c9a45c' stroke-width='4'/%3E%3C/svg%3E">
+<link rel="expect" href="#bar" blocking="render"><!-- hold the first frame until the player exists, so the page transition can run -->
+</head>
+<body>
+<script src="../lib/engine.js"></script>
+<script src="audio/nl/timings.js"></script>
+<script>
+'use strict';
+// Hoofdstuk 3: §6 (risicomanagement), §7 (verklaring van toepasselijkheid), §16 (aanvullende maatregelen)
+// en §17 (impact van risico's) van de BIO2. Beat ids match content/bio2/ch03/narration.nl.json. One idea per beat.
+const CHAPTER = { number: 3, title: 'Risico’s in vijf stappen', minutes: 9, language: 'nl', next: '../ch04/' };
+
+/* ---------- chapter drawing helpers (prefixed c3_; the shared b_ helpers live in ../lib/engine.js) ---------- */
+Object.assign(ICON, {
+  klok: 'M-14 0a14 14 0 1 0 28 0a14 14 0 1 0 -28 0 M0 -8V0L6 4',   // 'slot' started here and moved to the engine when chapter 12 needed it
+  gevaar: 'M0 -30L32 26H-32Z M0 -10V8 M0 16V18',
+  opening: 'M0 -36V-10 M0 10V36 M-12 -10H12 M-12 10H12',
+  gevolg: 'M0 -32V-14 M0 14V32 M-32 0H-14 M14 0H32 M-23 -23L-10 -10 M10 10L23 23 M-23 23L-10 10 M10 -10L23 -23',
+});
+// A part of the risk management method: frame, its number in amber, a title and sub lines. Hidden and a little low.
+const c3_part = (p, n, x, y, w, hgt, title, subs = []) => {
+  const g = G(p, { o: 0, y: 14 });
+  b_rect(g, x, y, w, hgt, { fill: COL.panel });
+  T(g, String(n), { x: x + 26, y: y + 50, size: 32, fill: COL.task, weight: 700, font: MONO });
+  T(g, title, { x: x + 66, y: y + 48, size: 27, weight: 600 });
+  subs.forEach((str, i) => T(g, str, { x: x + 66, y: y + 84 + i * 26, size: 19, fill: COL.dim }));
+  return g;
+};
+// The tile of impact area i (C3_IMPACT), entering at t0.
+const c3_area = (p, i, t0) => {
+  const x = 230 + (i % 4) * 310, y = 290 + Math.floor(i / 4) * 180, g = G(p, { o: 0, y: 12 });
+  b_rect(g, x, y, 290, 150, { fill: COL.panel });
+  T(g, String(i + 1), { x: x + 20, y: y + 36, size: 19, fill: COL.dim, weight: 700, font: MONO });
+  C3_IMPACT[i].forEach((str, k) => {
+    const look = { x: x + 145, y: y + 86 + k * 28, size: 20, weight: 600, anchor: 'middle' };
+    if (str === 'management control') b_term(g, str, 'management-control', { ...look, o: 1 });   // English: said in Dutch, heard on a click
+    else T(g, str, look);
+  });
+  tw(g, { o: 1, y: 0 }, t0, .45, out);
+};
+
+/* ---------- chapter data (used inside BEATS, so defined above it) ---------- */
+const C3_STEPS = ['1 CONTEXT', '2 METHODIEK', '3 IDENTIFICATIE', '4 ANALYSE', '5 BEHANDELING'];
+// The four things you establish when identifying a risk (BIO2 §6.3), laid out as cause and effect.
+const C3_RISK = [
+  { mark: 'dreig', icon: 'gevaar', name: 'bedreiging', sub: 'wat kan er gebeuren', col: COL.bad },
+  { mark: 'kwets', icon: 'opening', name: 'kwetsbaarheid', sub: 'waar zit de zwakke plek', col: COL.chalk },
+  { mark: 'middel', icon: 'db', name: 'waardevol middel', sub: 'informatie en middelen', col: COL.chalk },
+  { mark: 'gevolg', icon: 'gevolg', name: 'consequentie', sub: 'wat zijn de gevolgen', col: COL.chalk },
+];
+const C3_RX = i => 130 + i * 350;
+// The risk matrix: cell (c, r) with c = likelihood and r = impact, counted from the bottom left. Schematic risks.
+const C3_MX = c => 460 + c * 96, C3_MY = r => 640 - (r + 1) * 96;
+const C3_DOTS = [[3, 3], [1, 3], [2, 1], [0, 0], [3, 1], [1, 2]];
+// The impact areas an organisation weighs at least (BIO2 §17), in the order of the text.
+const C3_IMPACT = [['politieke schade', 'aan een bestuurder'], ['diplomatieke', 'schade'], ['financiële', 'gevolgen'], ['directe', 'imagoschade'],
+  ['verlies van publiek', 'respect of vertrouwen'], ['organisatiebrede', 'negatieve publiciteit'], ['significant verlies van', 'motivatie van medewerkers'], ['belangrijk verlies van', 'management control']];
+// The kinds of information weighed for additional measures (BIO2 §16) and, schematically, how many extra blocks.
+const C3_INFO = [[['open data'], 0], [['(bijzondere)', 'persoonsgegevens'], 2], [['gevoelige of', 'interne informatie'], 1], [['gerubriceerde', 'informatie'], 3]];
+// Rows of the statement of applicability: controls from ISO 27002, then government measures from the BIO.
+const C3_VVT = [['5.15', 'toegangsbeveiliging', 1], ['5.17', 'authenticatie-informatie', 1], ['8.13', 'back-up van informatie', 0], ['8.30', 'uitbestede ontwikkeling', -1],
+  ['5.17.01', 'meerfactorauthenticatie', 1], ['5.17.02', 'wachtwoordmanager', 1], ['8.13.04', 'herstelprocedure testen', 0]];
+
+/* ---------- beats: [id, title, run(m, D), { ask }?] ---------- */
+const BEATS = [
+  ['intro', 'Risico’s in vijf stappen', (m, D) =>
+    b_title(m, D, 'DEEL A · HET KADER · HOOFDSTUK 3', 'Risico’s in vijf stappen', 'Hoe je risico’s vindt, weegt en behandelt, en wat je daarover vastlegt.')],
+
+  ['kern', 'De kern', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 6 · RISICOMANAGEMENT');
+    b_txt(p, 'risicomanagement', 800, 236, .2, { size: 46, weight: 600 });
+    show(b_chip(p, 330, 280, 450, 'kernonderdeel van ISO 27001', { col: COL.iso, fill: COL.iso, hgt: 52 }), .5);
+    show(b_chip(p, 820, 280, 450, 'basis van de BIO-aanpak', { col: COL.task, fill: COL.task, hgt: 52 }), m('basis'));
+    // What it is for: four verbs, and round again.
+    ['identificeren', 'beoordelen', 'beheersen', 'monitoren'].forEach((str, i) => {
+      const x = 150 + i * 340, t0 = m('abcd'[i]);
+      show(b_chip(p, x, 470, 280, str, { hgt: 120, size: 26 }), t0);
+      if (i) b_arrow(p, x - 50, x - 10, 530, t0 - .2);
+    });
+    draw(path(p, 'M1310 596V672H290V602 M280 618L290 602L300 618', { stroke: COL.dim, 'stroke-width': 3 }, { d: 0 }), m('d', .5), 1);
+    b_txt(p, 'continu', 800, 706, m('d', .9), { size: 24, fill: COL.dim });
+  }],
+
+  ['vijf', 'Vijf stappen', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 6 · RISICOMANAGEMENT');
+    b_txt(p, 'het proces in vijf stappen', 800, 230, .2, { size: 34, weight: 600 });
+    [['context', 'bepalen'], ['methodiek', 'kiezen'], ['risico’s', 'identificeren'], ['risico’s', 'analyseren'], ['risico’s', 'behandelen']].forEach(([a, b2], i) => {
+      const x = 100 + i * 285;
+      show(put(b_rect(p, x, 320, 260, 250, { fill: COL.panel }), { o: 0 }), .3 + i * .08);   // the five frames are there at once
+      const g = G(p, { o: 0, y: 12 });
+      T(g, String(i + 1), { x: x + 28, y: 398, size: 58, fill: COL.task, weight: 700, font: MONO });
+      T(g, a, { x: x + 28, y: 468, size: 28, weight: 600 });
+      T(g, b2, { x: x + 28, y: 504, size: 28, weight: 600 });
+      if (i === 4) T(g, 'en maatregelen selecteren', { x: x + 28, y: 540, size: 17, fill: COL.dim });
+      tw(g, { o: 1, y: 0 }, m('s' + (i + 1)), .5, out);
+    });
+    b_txt(p, 'we nemen ze één voor één door', 800, 660, m('rij'), { size: 26, fill: COL.dim });
+  }],
+
+  ['context', 'Context', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 6.1 · CONTEXTBEPALING');
+    b_tabs(C3_STEPS, .3); b_tab(0, .3);
+    // The organisation, what is inside it and what acts on it from outside.
+    show(put(b_rect(p, 520, 300, 560, 330, { stroke: COL.dim, rx: 12 }), { o: 0 }), .2);
+    b_txt(p, 'ORGANISATIE', 548, 340, .2, { size: 17, fill: COL.dim, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '2');
+    const tI = m('intern'), tE = m('extern');
+    b_txt(p, 'interne factoren', 800, 396, tI, { size: 24, weight: 600 });
+    ['processen', 'mensen', 'informatiesystemen'].forEach((str, i) => show(b_chip(p, 670, 418 + i * 60, 260, str), tI + .2 + i * .2));
+    [[130, 420, 510, ['ketenpartners', 'leveranciers']], [1190, 1180, 1090, ['dreigingen', 'nieuwe technologie']]].forEach(([x, a1, a2, items], side) => {
+      b_txt(p, 'externe factoren', x + 140, 396, tE + side * .5, { size: 24, weight: 600 });
+      items.forEach((str, i) => {
+        show(b_chip(p, x, 418 + i * 70, 280, str), tE + .2 + side * .5 + i * .2);
+        b_arrow(p, a1, a2, 441 + i * 70, tE + .4 + side * .5 + i * .2);
+      });
+    });
+    // And the law.
+    b_rise(b_code(p, 800, 150, 'Cbw', 'wettelijke verplichtingen', 420), m('wet'));
+    b_down(p, 800, 240, 294, m('wet', .4), COL.iso);
+  }],
+
+  ['methodiek', 'Methodiek', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 6.2 · RISICOMANAGEMENTMETHODIEK');
+    b_tab(1, .2);
+    b_txt(p, 'een risicomanagementmethodiek kiezen', 800, 200, .2, { size: 34, weight: 600 });
+    b_txt(p, 'aansluitend bij NEN-EN-ISO/IEC 27001', 800, 240, .5, { size: 19, fill: COL.iso, weight: 600, font: MONO });
+    b_txt(p, 'met ten minste vier onderdelen', 800, 296, m('vier'), { size: 24, fill: COL.dim });
+    [['quickscan', 'is het basisniveau toereikend?'], ['volledige risicoanalyse', 'om tot aanvullende maatregelen te komen'],
+      ['risicoregister', 'met de tijdelijk geaccepteerde risico’s'], ['opvolging', 'om die risico’s structureel op te lossen']].forEach(([title, sub], i) =>
+      b_rise(c3_part(p, i + 1, 170 + (i % 2) * 660, 340 + Math.floor(i / 2) * 170, 600, 140, title, [sub]), m('p' + (i + 1))));
+  }],
+
+  ['quickscan', 'Quickscan', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 6.2 · RISICOMANAGEMENTMETHODIEK');
+    // Part 1 asks one question; the answer decides what follows.
+    b_rise(c3_part(p, 1, 110, 370, 340, 150, 'quickscan', ['classificatie van proces', 'en informatiesysteem']), .2);
+    const tQ = m('vraag');
+    b_arrow(p, 460, 550, 445, tQ - .2);
+    const ask = G(p, { o: 0 });
+    b_rect(ask, 560, 395, 300, 100, { stroke: COL.chalk, rx: 50 });
+    T(ask, 'basisniveau', { x: 710, y: 438, size: 24, weight: 600, anchor: 'middle' });
+    T(ask, 'toereikend?', { x: 710, y: 470, size: 24, weight: 600, anchor: 'middle' });
+    show(ask, tQ);
+    const tJ = m('ja'), tN = m('nee');
+    draw(path(p, 'M870 420H930V300H976 M962 290L976 300L962 310', { stroke: COL.good, 'stroke-width': 3 }, { d: 0 }), tJ, .6);
+    b_txt(p, 'ja', 900, 366, tJ, { size: 22, weight: 600, fill: COL.good });
+    const base = G(p, { o: 0, y: 14 });
+    b_rect(base, 990, 250, 460, 100, { fill: COL.panel, stroke: COL.task });
+    T(base, 'het basisniveau volstaat', { x: 1220, y: 310, size: 26, weight: 600, fill: COL.task, anchor: 'middle' });
+    b_rise(base, tJ + .4);
+    draw(path(p, 'M870 470H930V570H976 M962 560L976 570L962 580', { stroke: COL.chalk, 'stroke-width': 3 }, { d: 0 }), tN, .6);
+    b_txt(p, 'nee', 898, 536, tN, { size: 22, weight: 600 });
+    b_rise(c3_part(p, 2, 990, 500, 460, 140, 'volledige risicoanalyse'), tN + .6);
+    b_down(p, 1220, 646, 706, m('extra'));
+    const more = G(p, { o: 0, y: 14 });
+    b_rect(more, 990, 712, 460, 80, { fill: COL.panel, stroke: COL.dim });
+    T(more, 'aanvullende maatregelen', { x: 1220, y: 762, size: 26, weight: 600, anchor: 'middle' });
+    b_rise(more, m('extra', .3));
+  }],
+
+  ['register', 'Risicoregister', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 6.2 · RISICOMANAGEMENTMETHODIEK');
+    b_rise(c3_part(p, 3, 200, 250, 640, 420, 'risicoregister'), .2);
+    // Risks that are accepted for now. The clock says: not for good.
+    const tT = m('tijd'), tL = m('los');
+    const rows = [0, 1, 2, 3, 4].map(i => {
+      const y = 372 + i * 56, g = G(p, { o: 0 });
+      T(g, 'R-0' + (i + 1), { x: 232, y, size: 21, fill: COL.dim, weight: 600, font: MONO });
+      mk('rect', { x: 316, y: y - 16, width: [200, 150, 230, 170, 210][i], height: 18, rx: 3, fill: COL.dim, 'fill-opacity': .45 }, g);
+      const clock = b_icon(g, 'klok', { x: 592, y: y - 7, s: .8 });
+      const label = T(g, 'tijdelijk geaccepteerd', { x: 616, y, size: 19, fill: COL.dim });
+      show(g, m('rows') + i * .15);
+      tw(clock, { s: 1.1 }, tT + i * .08, .2, out); tw(clock, { s: .8 }, tT + i * .08 + .22, .4); tw(label, { c_fill: COL.chalk }, tT, .4);
+      return g;
+    });
+    // Part 4 follows them up until they are solved for good: three leave the register.
+    b_rise(c3_part(p, 4, 1000, 380, 420, 150, 'opvolging', ['van tijdelijk geaccepteerde risico’s']), tT + 1.4);
+    b_arrow(p, 852, 990, 455, tL - .2);
+    rows.slice(0, 3).forEach((g, i) => {
+      tw(g, { x: 640, o: 0 }, tL + i * .5, .8, io);
+      const done = G(p, { o: 0 });
+      b_tick(done, 1070 + i * 70, 600);
+      show(done, tL + .7 + i * .5);
+    });
+    rows.slice(3).forEach(g => tw(g, { y: -168 }, tL + 2.2, .6, io));
+    b_txt(p, 'structureel opgelost', 1210, 668, tL + 1, { size: 26, weight: 600, fill: COL.good });
+  }],
+
+  ['identificatie', 'Risico-identificatie', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 6.3 · RISICO-IDENTIFICATIE');
+    b_tab(2, .2);
+    S.risk = C3_RISK.map((part, i) => {
+      const x = C3_RX(i), cx = x + 145;
+      show(put(b_rect(p, x, 250, 290, 290, { fill: COL.panel }), { o: 0 }), .3 + i * .1);   // the four frames are there at once
+      const g = G(p, { o: 0 });
+      b_icon(g, part.icon, { x: cx, y: 352, s: 1.7, stroke: part.col });
+      T(g, part.name, { x: cx, y: 464, size: 26, weight: 600, fill: part.col, anchor: 'middle' });
+      T(g, part.sub, { x: cx, y: 500, size: 19, fill: COL.dim, anchor: 'middle' });
+      show(g, m(part.mark));
+      return g;
+    });
+    // From threat, through the weak spot, to the asset and what follows.
+    b_arrow(p, C3_RX(0) + 298, C3_RX(1) - 8, 395, m('kwets'), { stroke: COL.bad });
+    b_arrow(p, C3_RX(1) + 298, C3_RX(2) - 8, 395, m('kwets', .4), { stroke: COL.bad });
+    b_arrow(p, C3_RX(2) + 298, C3_RX(3) - 8, 395, m('gevolg'), { stroke: COL.bad });
+  }],
+
+  ['q1', 'Controlevraag', () => {}, { ask: done => {
+    const items = C3_RISK.map((part, i) => ({ el: S.risk[i], box: [C3_RX(i), 250, 290, 290], label: part.name }));
+    quiz(WIDE, [{
+      id: 'c-risico-1', prompt: ['Een gemaal wordt op afstand bediend via een modem dat geen updates meer krijgt. Wat is het ontbreken van updates?'],
+      build: pickEls(items, 1, 'Een zwakke plek waar een bedreiging gebruik van kan maken: een kwetsbaarheid.', i => [
+        'De bedreiging is wat er kan gebeuren, bijvoorbeeld een aanvaller. Het ontbreken van updates is de zwakke plek.', null,
+        'Het gemaal met zijn besturing is het waardevolle middel. Het ontbreken van updates is de zwakke plek daarin.',
+        'De consequentie is het gevolg als het misgaat. Het ontbreken van updates is de zwakke plek.'][i]),
+    }, {
+      id: 'c-risico-2', prompt: ['Een aanvaller wil de besturing van het gemaal overnemen. Wat is dat?'],
+      build: pickEls(items, 0, 'Iets dat het middel kan treffen: een bedreiging.', i => [null,
+        'De kwetsbaarheid is de zwakke plek. De aanvaller is wat er kan gebeuren: de bedreiging.',
+        'Het middel is wat je wilt beschermen. De aanvaller is de bedreiging.',
+        'De consequentie is het gevolg van een geslaagde aanval. De aanvaller zelf is de bedreiging.'][i]),
+    }, {
+      id: 'c-risico-3', prompt: ['Het waterpeil kan dan niet meer worden geregeld. Wat is dat?'],
+      build: pickEls(items, 3, 'Het gevolg als de bedreiging zich voordoet: de consequentie.', i => [
+        'De bedreiging is de aanvaller. Dat het peil niet meer te regelen is, is het gevolg.',
+        'De kwetsbaarheid is de zwakke plek. Dat het peil niet meer te regelen is, is het gevolg.',
+        'Het middel is het gemaal zelf. Dat het peil niet meer te regelen is, is het gevolg.', null][i]),
+    }], done);
+  } }],
+
+  ['hulp', 'Inventariseren', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 6.3 · RISICO-IDENTIFICATIE');
+    // The inventory fills up; the list is never complete.
+    show(put(b_rect(p, 150, 250, 760, 400, { fill: COL.panel }), { o: 0 }), .2);
+    b_txt(p, 'INVENTARIS VAN DREIGINGEN EN SCENARIO’S', 180, 294, .2, { size: 16, fill: COL.dim, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    [['keten', 'ketenafhankelijkheden', 'vb'], ['tandwiel', 'operationele technologie', 'ot'], ['zorg', 'gegevensuitwisseling met zorginstellingen', 'zorg']].forEach(([icon, str, mark], i) => {
+      const y = 360 + i * 70, g = G(p, { o: 0, x: -14 });
+      b_icon(g, icon, { x: 210, y, s: .62, stroke: COL.dim });
+      T(g, str, { x: 262, y: y + 8, size: 24 });
+      path(g, `M180 ${y + 36}H880`, { stroke: COL.edge, 'stroke-width': 1.5 });
+      tw(g, { o: 1, x: 0 }, m(mark), .5, out);
+    });
+    [0, 1].forEach(i => show(put(mk('rect', { x: 262, y: 562 + i * 36, width: 300 - i * 80, height: 14, rx: 3, fill: COL.edge }, p), { o: 0 }), m('zorg', 1.2) + i * .2));
+    // Aids for the job.
+    b_txt(p, 'hulpmiddelen', 1210, 232, m('tools'), { size: 22, fill: COL.dim });
+    [['NEN-ISO/IEC 27005', 'richtlijn voor risicobeheer'], ['NIST CSF', 'Cybersecurity Framework'], ['NIST SP 800-30', 'risicobeoordeling']].forEach(([code, sub], i) =>
+      b_rise(b_code(p, 1210, 256 + i * 116, code, sub, 440), m('tools') + .2 + i * .6));
+  }],
+
+  ['analyse', 'Risicoanalyse', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 6.4 · RISICOANALYSE');
+    b_tab(3, .2);
+    // The risks that were found, as a list on the left.
+    const found = [b_txt(p, 'geïdentificeerde', 250, 222, .3, { size: 20, fill: COL.dim }), b_txt(p, 'risico’s', 250, 248, .3, { size: 20, fill: COL.dim })];
+    found.forEach(e => hide(e, m('plaats') + 1.4, .4));
+    const dots = C3_DOTS.map((cell, i) => {
+      const g = G(p, { x: 250, y: 296 + i * 60, o: 0 });
+      mk('circle', { r: 18, fill: COL.panel, stroke: COL.chalk, 'stroke-width': 2.5 }, g);
+      T(g, String(i + 1), { y: 7, size: 19, anchor: 'middle', weight: 700, font: MONO });
+      show(g, .3 + i * .07);
+      return g;
+    });
+    // Two measures: how likely, and how heavy. Darker means more of both.
+    const grid = G(p, { o: 0 });
+    for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++)
+      mk('rect', { x: C3_MX(c), y: C3_MY(r), width: 96, height: 96, fill: COL.bad, 'fill-opacity': (.05 + .065 * (c + r)).toFixed(2), stroke: COL.edge, 'stroke-width': 1.5 }, grid);
+    p.insertBefore(grid, dots[0]);                 // the risks will lie on top of the cells
+    show(grid, m('as'));
+    draw(path(p, 'M460 664H844 M830 654L844 664L830 674', { stroke: COL.dim, 'stroke-width': 3 }, { d: 0 }), m('w'), .6);
+    b_txt(p, 'waarschijnlijkheid', 652, 702, m('w'), { size: 24, weight: 600 });
+    draw(path(p, 'M436 640V256 M426 270L436 256L446 270', { stroke: COL.dim, 'stroke-width': 3 }, { d: 0 }), m('i'), .6);
+    put(b_txt(p, 'impact', 410, 448, m('i'), { size: 24, weight: 600 }), { r: -90 });
+    dots.forEach((g, i) => tw(g, { x: C3_MX(C3_DOTS[i][0]) + 48, y: C3_MY(C3_DOTS[i][1]) + 48 }, m('plaats') + i * .18, .8, io));
+    // What that gives: an order to work in.
+    const tP = m('prio');
+    b_txt(p, 'prioriteiten', 1200, 292, tP, { size: 28, weight: 600 });
+    [['eerst', '1', .8], ['daarna', '2 · 5 · 3 · 6', .45], ['later', '4', .16]].forEach(([str, ids, op], i) => {
+      const y = 326 + i * 84, g = G(p, { o: 0, x: 16 });
+      mk('rect', { x: 980, y, width: 22, height: 64, rx: 3, fill: COL.bad, 'fill-opacity': op }, g);
+      T(g, str, { x: 1026, y: y + 41, size: 24, weight: 600 });
+      T(g, ids, { x: 1180, y: y + 41, size: 22, fill: COL.dim, font: MONO });
+      tw(g, { o: 1, x: 0 }, tP + .3 + i * .3, .5, out);
+    });
+    b_txt(p, 'SCHEMATISCH', 980, 612, tP + .3, { size: 15, fill: COL.faint, anchor: 'start', weight: 600, font: MONO }).setAttribute('letter-spacing', '1.5');
+  }],
+
+  ['impact', 'Impactgebieden', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 17 · IMPACT VAN RISICO’S');
+    b_txt(p, 'impact hangt af van de context', 830, 200, .2, { size: 34, weight: 600 });
+    draw(path(p, 'M150 640V300 M140 316L150 300L160 316', { stroke: COL.dim, 'stroke-width': 3 }, { d: 0 }), .3, .8);
+    put(b_txt(p, 'impact', 124, 470, .5, { size: 24, weight: 600 }), { r: -90 });
+    b_txt(p, 'weeg minimaal deze acht impactgebieden af', 830, 244, m('min'), { size: 24, fill: COL.dim });
+    [0, 1, 2, 3].forEach(i => c3_area(p, i, m('g' + (i + 1))));
+  }],
+
+  ['impact2', 'Impactgebieden, vervolg', (m) => {
+    // Same picture: the second row.
+    const p = S.panel;
+    [4, 5, 6, 7].forEach(i => c3_area(p, i, m('g' + (i + 1))));
+    show(b_icon(p, 'keten', { x: 378, y: 722, o: 0, stroke: COL.dim }), m('keten'));
+    b_txt(p, 'ook bruikbaar bij de uitwisseling van impact met ketenpartners', 860, 732, m('keten', .15), { size: 26 });
+  }, { hold: true }],   // the lesson waits here: the English term can be heard before it goes on
+
+  ['behandeling', 'Risicobehandeling', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 6.5 · RISICOBEHANDELING');
+    b_tab(4, .2);
+    // A risk as a bar; each measure brings it down.
+    draw(path(p, 'M250 640H700', { stroke: COL.dim, 'stroke-width': 3 }, { d: 0 }), .2, .6);
+    const bar = put(b_rect(p, 330, 640, 120, 0, { fill: COL.bad, stroke: 'none', rx: 3, 'fill-opacity': .6 }), { a_y: 640, a_height: 0 });
+    tw(bar, { a_y: 260, a_height: 380 }, .3, .8, out);
+    b_txt(p, 'risico', 390, 680, .4, { size: 22, fill: COL.dim });
+    const tK = m('kies'), tD = m('daal');
+    b_txt(p, 'passende beheersmaatregelen selecteren', 475, 214, tK, { size: 26, weight: 600 });
+    show(path(p, 'M250 520H700', { stroke: COL.chalk, 'stroke-width': 2, 'stroke-dasharray': '8 8' }, { o: 0 }), tK + .4);
+    b_txt(p, 'acceptabel niveau', 712, 527, tK + .4, { size: 20, anchor: 'start' });
+    // Where the measures come from.
+    b_rise(b_code(p, 1180, 250, 'NEN-EN-ISO/IEC 27001', 'bijlage A: reeks beheersmaatregelen', 480), m('bron'));
+    b_down(p, 1180, 340, 404, m('uit') - .2, COL.iso);
+    b_rise(b_code(p, 1180, 410, 'NEN-EN-ISO/IEC 27002', 'nader uitgewerkt', 480), m('uit'));
+    [0, 1, 2].forEach(i => {
+      const t0 = tD + i * .9;
+      const q = put(mk('rect', { width: 64, height: 64, rx: 5, fill: COL.iso, 'fill-opacity': .8 }, p), { x: 1148, y: 510, o: 0, s: .5 });
+      show(q, t0, .2);
+      tw(q, { x: 486, y: 570 - i * 72, s: 1 }, t0, .7, io);
+      tw(bar, { a_y: 260 + (i + 1) * 90, a_height: 380 - (i + 1) * 90 }, t0 + .6, .5);
+    });
+    b_txt(p, 'maatregelen', 518, 680, tD, { size: 22, fill: COL.dim });
+  }],
+
+  ['altijd', 'Altijd verplicht', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 6.5 · RISICOBEHANDELING');
+    // Two kinds of measure, each with a switch: apply it, or not. Only one of the switches can move.
+    const row = (y, col, kick, left, right, t0) => {
+      const g = G(p, { o: 0 });
+      b_rect(g, 160, y, 1280, 140, { fill: COL.panel, stroke: col });
+      T(g, kick, { x: 192, y: y + 46, size: 17, fill: col, weight: 700, font: MONO }).setAttribute('letter-spacing', '2');
+      [[770, left], [1090, right]].forEach(([x, str]) => { b_rect(g, x, y + 40, 300, 60, { rx: 6 }); });
+      const lt = T(g, left, { x: 920, y: y + 78, size: 21, anchor: 'middle', weight: 600 });
+      const rt = T(g, right, { x: 1240, y: y + 78, size: 21, anchor: 'middle', weight: 600 });
+      const knob = put(b_rect(g, 770, y + 40, 300, 60, { fill: col, stroke: col, sw: 3, rx: 6, 'fill-opacity': .16 }), { a_x: 770 });
+      show(g, t0);
+      return { g, knob, lt, rt, y };
+    };
+    const tV = m('vast'), tK = m('keus'), tN = m('nooit');
+    const gov = row(410, COL.task, 'OVERHEIDSMAATREGEL · BIO', 'toepassen', 'risico accepteren', .2);
+    b_txt(p, 'altijd verplicht', 192, 504, tV, { size: 30, weight: 600, fill: COL.task, anchor: 'start' });
+    const iso = row(230, COL.iso, 'BEHEERSMAATREGEL · ISO 27002', 'toepassen', 'afwijken met risicoanalyse', tK - .2);
+    b_txt(p, 'afwijken kan, onderbouwd', 192, 324, tK + .2, { size: 30, weight: 600, anchor: 'start' });
+    tw(iso.knob, { a_x: 1090 }, tK + .6, .6, io); tw(iso.knob, { a_x: 770 }, tK + 3, .6, io);
+    // The amber switch is locked: it gives a little and springs back; accepting the risk is struck out.
+    S.lock = b_icon(p, 'slot', { x: 808, y: gov.y + 68, s: .8, o: 0, stroke: COL.task });
+    show(S.lock, tV);
+    tw(gov.knob, { a_x: 840 }, tN + .4, .25, out); tw(gov.knob, { a_x: 770 }, tN + .65, .35, back);
+    tw(S.lock, { x: 878 }, tN + .4, .25, out); tw(S.lock, { x: 808 }, tN + .65, .35, back);
+    draw(path(p, `M1128 ${gov.y + 71}H1352`, { stroke: COL.bad, 'stroke-width': 4 }, { d: 0 }), tN + 1.2, .4);
+    tw(gov.rt, { c_fill: COL.dim }, tN + 1.4, .4);
+    b_txt(p, 'tenzij de maatregel niet van toepassing kan zijn', 800, 596, m('tenzij'), { size: 24 });
+  }],
+
+  ['q2', 'Controlevraag', () => {}, { ask: done => quiz(WIDE, [{
+    id: 'c-verplicht', prompt: ['Het risico is klein. Mag een organisatie een overheidsmaatregel dan overslaan?'],
+    build: choice([['nee, tenzij niet van toepassing'], ['ja, na acceptatie'], ['ja, bij een klein risico']], 0,
+      'Overheidsmaatregelen zijn altijd verplicht, ongeacht de risico-inschatting. Alleen als een maatregel niet van toepassing kan zijn, vervalt hij.',
+      [null, 'Accepteren kan bij een overheidsmaatregel juist niet, hoe het risico ook wordt ingeschat.',
+        'De inschatting van het risico doet er hier niet toe: overheidsmaatregelen zijn altijd verplicht.'],
+      () => { fx(S.lock, { s: 1.3 }, 0, .2, out); fx(S.lock, { s: .8 }, .22, .4); }),
+  }], done) }],
+
+  ['soorten', 'Soorten informatie', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 16 · AANVULLENDE MAATREGELEN');
+    // The baseline of chapter 1, with four kinds of information standing on it.
+    draw(path(p, 'M200 560H1400', { stroke: COL.task, 'stroke-width': 4 }, { d: 0 }), .2, .9);
+    b_txt(p, 'basisniveau', 1412, 568, .6, { size: 24, weight: 600, fill: COL.task, anchor: 'start' });
+    b_txt(p, 'verschillende soorten informatie', 800, 200, m('typen'), { size: 34, weight: 600 });
+    const tZ = m('zelf');
+    C3_INFO.forEach(([lines, extra], i) => {
+      const cx = 350 + i * 300, g = G(p, { o: 0, y: 12 });
+      b_icon(g, 'doc', { x: cx, y: 500, s: 2 });
+      lines.forEach((str, k) => T(g, str, { x: cx, y: 606 + k * 28, size: 22, weight: 600, anchor: 'middle' }));
+      tw(g, { o: 1, y: 0 }, m('t' + (i + 1)), .5, out);
+      // What comes on top of the baseline, schematically.
+      for (let k = 0; k < extra; k++) {
+        const b3 = G(p, { x: cx, y: 420 - k * 52, s: 0, o: 0 });
+        b_rect(b3, -44, -20, 88, 40, { fill: COL.panel, stroke: COL.chalk, rx: 5 });
+        T(b3, '+', { y: 9, size: 26, anchor: 'middle', weight: 700, font: MONO });
+        pop(b3, tZ + 1.6 + i * .25 + k * .15);
+      }
+    });
+    b_txt(p, 'welke aanvullende maatregelen: dat bepaalt de organisatie zelf', 800, 244, tZ, { size: 24 });
+    b_txt(p, 'SCHEMATISCH', 200, 290, tZ + 1.6, { size: 15, fill: COL.faint, anchor: 'start', weight: 600, font: MONO }).setAttribute('letter-spacing', '1.5');
+  }],
+
+  ['vvt', 'Verklaring van toepasselijkheid', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 7 · VERKLARING VAN TOEPASSELIJKHEID');
+    hide(S.tabsG, 0, .4);
+    const tD = m('doc'), tR = m('rij'), tI = m('impl'), tO = m('ovm'), tU = m('uitz');
+    const doc = G(p, { o: 0 });
+    b_rect(doc, 240, 220, 700, 490, { fill: COL.panel, stroke: COL.dim });
+    T(doc, 'Verklaring van toepasselijkheid (VvT)', { x: 270, y: 270, size: 28, weight: 600 });
+    [['MAATREGEL', 270, 'start'], ['GESELECTEERD', 660, 'middle'], ['GEÏMPLEMENTEERD', 840, 'middle']].forEach(([str, x, anchor]) =>
+      T(doc, str, { x, y: 316, size: 15, fill: COL.dim, anchor, weight: 700, font: MONO }).setAttribute('letter-spacing', '1'));
+    show(doc, .2);
+    b_txt(p, 'VEREIST DOOR NEN-EN-ISO/IEC 27001', 242, 206, tD, { size: 16, fill: COL.iso, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '1');
+    // The annex is drawn first, so the row that moves into it lies on top of it.
+    const annex = G(p, { o: 0, y: 14 });
+    b_rect(annex, 1010, 330, 440, 210, { fill: COL.panel, stroke: COL.dim });
+    T(annex, 'BIJLAGE', { x: 1040, y: 372, size: 15, fill: COL.dim, weight: 700, font: MONO }).setAttribute('letter-spacing', '2');
+    T(annex, 'Uitzonderingen op de VvT', { x: 1040, y: 412, size: 26, weight: 600 });
+    T(annex, 'afwijking of niet toepasbaar', { x: 1040, y: 504, size: 18, fill: COL.dim });
+    b_rise(annex, tU);
+    C3_VVT.forEach(([code, name, impl], i) => {
+      const gov = i > 3, col = gov ? COL.task : COL.iso, y = 366 + i * 48, t0 = (gov ? tO : tR) + (gov ? i - 4 : i) * .2;
+      const g = G(p, { o: 0 });
+      T(g, code, { x: 270, y, size: 20, fill: col, weight: 700, font: MONO });
+      T(g, name, { x: 376, y, size: 19, fill: COL.dim });
+      show(g, t0);
+      if (impl < 0) {
+        // Not applicable here: it moves to the annex with the exceptions.
+        const na = b_txt(p, 'niet toepasbaar', 660, y, t0 + .2, { size: 17, fill: COL.dim, font: MONO });
+        hide(na, tU + .2, .3);
+        tw(g, { x: 770, y: 470 - y }, tU + .5, .9, io);
+        return;
+      }
+      const sel = G(p, { o: 0 }), done = G(p, { o: 0 });
+      b_tick(sel, 660, y - 7, col);
+      if (impl) b_tick(done, 840, y - 7, col); else T(done, 'gepland', { x: 840, y, size: 17, fill: COL.dim, anchor: 'middle', font: MONO });
+      show(sel, t0 + .2); show(done, gov ? t0 + .4 : tI + i * .2);
+    });
+  }],
+
+  ['wrap', 'Samenvatting', (m) => {
+    const p = panel(0);
+    b_head(p, 'SAMENVATTING');
+    b_wrap(p, [
+      ['Risicomanagement is de basis van de BIO-aanpak.', 'Vijf stappen: context, methodiek, identificatie, analyse en behandeling.', 'w1'],
+      ['Identificeren, en dan classificeren.', 'Middel, bedreiging, kwetsbaarheid en consequentie; daarna waarschijnlijkheid en impact.', 'w2'],
+      ['Overheidsmaatregelen zijn altijd verplicht.', 'Ongeacht de risico-inschatting, tenzij ze niet van toepassing kunnen zijn.', 'w3'],
+      ['Wat je kiest, staat in de verklaring van toepasselijkheid.', 'Uitzonderingen komen in een bijlage.', 'w4'],
+    ], m);
+  }],
+
+  ['final1', 'Oefenronde 1', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-stellingen', prompt: ['Klopt het, of klopt het niet?'],
+    build: grid([
+      { parts: ['De quickscan bepaalt of het basisniveau toereikend is.'], ans: ['k'], why: 'Zo niet, dan volgt een volledige risicoanalyse.' },
+      { parts: ['In het risicoregister staan risico’s die voorgoed zijn geaccepteerd.'], ans: ['n'], why: 'Ze zijn tijdelijk geaccepteerd; de opvolging lost ze structureel op.' },
+      { parts: ['Een risico classificeer je op waarschijnlijkheid en impact.'], ans: ['k'], why: 'Dat geeft een consistent beeld van de prioriteiten.' },
+      { parts: ['Financiële gevolgen zijn het enige impactgebied dat de BIO noemt.'], ans: ['n'], why: 'De BIO noemt er minimaal acht, zoals politieke schade en verlies van publiek vertrouwen.' },
+      { parts: ['Overheidsmaatregelen neem je uitdrukkelijk op in de verklaring van toepasselijkheid.'], ans: ['k'], why: 'Naast de geselecteerde beheersmaatregelen.' },
+    ], KN, { multi: false, text: true }),
+  }], done, 'Oefenronde 1 van 2') }],
+
+  ['final2', 'Oefenronde 2', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-eerste', prompt: ['Wat is de eerste stap van het risicomanagementproces?'],
+    build: choice([['Maatregelen selecteren.'], ['De context bepalen.'], ['Risico’s analyseren.']], 1,
+      'Eerst de context: interne en externe factoren, en de wettelijke verplichtingen.',
+      ['Dat is de laatste stap. Eerst bepaal je de context.', null, 'Analyseren is stap vier. Eerst bepaal je de context.']),
+  }, {
+    id: 'p-soorten', prompt: ['Welke soorten informatie weegt een organisatie in elk geval af bij aanvullende maatregelen?'],
+    build: choice([['Alleen gerubriceerde informatie.'], ['Alleen persoonsgegevens.'], ['Open data, persoonsgegevens, gevoelige of interne informatie en gerubriceerde informatie.']], 2,
+      'In ieder geval deze vier, en niet uitsluitend deze.',
+      ['Gerubriceerde informatie hoort erbij, maar ook open data, persoonsgegevens en gevoelige of interne informatie.',
+        'Persoonsgegevens horen erbij, maar ook open data, gevoelige of interne informatie en gerubriceerde informatie.', null]),
+  }, {
+    id: 'p-uitzondering', prompt: ['Een beheersmaatregel is voor jouw organisatie niet toepasbaar. Waar leg je dat vast?'],
+    build: choice([['In de bijlage met uitzonderingen op de verklaring van toepasselijkheid.'], ['Nergens: wat niet van toepassing is, hoeft niet te worden vastgelegd.'], ['In het risicoregister.']], 0,
+      'Afwijkingen en niet-toepasbare beheersmaatregelen komen in de bijlage ‘Uitzonderingen op de VvT’.',
+      [null, 'Ook dat leg je vast: in de bijlage met uitzonderingen op de verklaring van toepasselijkheid.',
+        'Het risicoregister is voor tijdelijk geaccepteerde risico’s. Uitzonderingen komen in de bijlage bij de verklaring van toepasselijkheid.']),
+  }], done, 'Oefenronde 2 van 2 · vraag') }],
+
+  ['finish', 'Afgerond', () => { panel(0); }, { ask: finishCard }],
+].map(([id, title, run, extra]) => ({ id, title, run, ...extra }));
+
+boot();
+</script>
+</body>
+</html>

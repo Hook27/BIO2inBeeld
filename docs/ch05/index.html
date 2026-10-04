@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wie doet wat? · BIO2 in beeld</title>
+<link rel="stylesheet" href="../lib/engine.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2314171a'/%3E%3Cpath d='M15 52V38M27 52V20M39 52V32M51 52V14' stroke='%238d959d' stroke-width='7'/%3E%3Cpath d='M7 28H57' stroke='%23c9a45c' stroke-width='4'/%3E%3C/svg%3E">
+<link rel="expect" href="#bar" blocking="render"><!-- hold the first frame until the player exists, so the page transition can run -->
+</head>
+<body>
+<script src="../lib/engine.js"></script>
+<script src="audio/nl/timings.js"></script>
+<script>
+'use strict';
+// Hoofdstuk 5: §12 (governance), §13 (leveranciers), §14 (informatiebeveiligingsprincipes), §15 (balans in de
+// maatregelenset) en §18 (relatie BIO en andere onderwerpen) van de BIO2.
+// Beat ids match content/bio2/ch05/narration.nl.json. One idea per beat.
+const CHAPTER = { number: 5, title: 'Wie doet wat? Rollen, leveranciers en principes', minutes: 7, language: 'nl', next: '../ch06/' };
+
+/* ---------- chapter data (used by the helpers and inside BEATS, so defined first) ---------- */
+const C5_TABS = ['1 ROLLEN', '2 LEVERANCIERS', '3 PRINCIPES', '4 BALANS'];
+// The roles of BIO2 §12 and where they stand on the role map: three fixed ones, and the optional internal supervisor.
+const C5_ROLES = [
+  { key: 'bestuurder', lines: ['bestuurder'], x: 390, y: 250, box: [305, 185, 170, 172] },
+  { key: 'lijn', lines: ['lijnmanagement'], x: 390, y: 520, box: [290, 455, 200, 172] },
+  { key: 'ciso', lines: ['CISO'], x: 150, y: 385, box: [65, 320, 170, 172] },
+  { key: 'intern', lines: ['interne', 'toezichthouder'], x: 630, y: 385, box: [530, 320, 200, 198] },
+];
+// Six principles the BIO names as examples (§14), with a gloss of our own.
+const C5_PRINC = [
+  ['security by design & default', ['veiligheid vanaf het ontwerp,', 'en standaard ingeschakeld']],
+  ['need to know', ['toegang alleen tot', 'wat je nodig hebt']],
+  ['assume breach', ['ga ervan uit dat een', 'aanvaller al binnen is']],
+  ['zero trust', ['vertrouw niets en', 'niemand vanzelf']],
+  ['dingen gaan fout', ['reken op fouten', 'en storingen']],
+  ['defense in depth', ['meerdere lagen', 'achter elkaar']],
+];
+// Three ways to keep the set of measures in balance (§15); start: how lopsided each bar begins (schematic).
+const C5_BAL = [
+  { mark: 'd1', names: ['beschikbaarheid', 'integriteit', 'vertrouwelijkheid'], start: [.25, .92, .45] },
+  { mark: 'd2', names: ['organisatie en proces', 'mens en gedrag', 'applicatie en techniek'], start: [.4, .18, .95] },
+  { mark: 'd3', names: ['identificeren', 'beschermen', 'detecteren', 'reageren', 'herstellen'], start: [.3, .95, .35, .2, .25] },
+];
+// The clip of each principle's English name (content/bio2/terms.json); the Dutch one has none.
+const C5_SLUG = ['security-by-design', 'need-to-know', 'assume-breach', 'zero-trust', null, 'defense-in-depth'];
+const C5_BY = r => 250 + r * 120;
+
+/* ---------- chapter drawing helpers (prefixed c5_; the shared b_ helpers live in ../lib/engine.js) ---------- */
+// The role map: four roles and the lines between them. It lives outside the panels, so it stays while the picture
+// beside it changes. Everything starts hidden; the beats show the nodes and links.
+function c5_map() {
+  const g = S.mapG = G(scene);
+  const dash = { stroke: COL.dim, 'stroke-width': 2.5, 'stroke-dasharray': '7 7' };
+  S.links = {
+    lijn: path(g, 'M390 362V452', { stroke: COL.dim, 'stroke-width': 3 }, { o: 0 }),           // hierarchy
+    cisoB: path(g, 'M204 350L336 276', dash, { o: 0 }),                                          // advice to the board
+    cisoL: path(g, 'M204 420L336 494', dash, { o: 0 }),                                          // advice to the line
+    intern: path(g, 'M576 350L444 276', dash, { o: 0 }),                                         // help with oversight
+  };
+  S.nodes = {};
+  C5_ROLES.forEach(role => {
+    const n = G(g, { o: 0 });
+    const ring = mk('circle', { cx: role.x, cy: role.y, r: 58, fill: COL.panel, stroke: COL.edge, 'stroke-width': 3,
+      ...(role.key === 'intern' ? { 'stroke-dasharray': '8 6' } : {}) }, n);        // dashed: this role is optional (§12.4: 'kan helpen')
+    b_icon(n, 'persoon', { x: role.x, y: role.y, s: 1.15 });
+    role.lines.forEach((str, k) => T(n, str, { x: role.x, y: role.y + 90 + k * 26, size: 23, weight: 600, anchor: 'middle' }));
+    S.nodes[role.key] = { g: n, ring };
+  });
+}
+// Light up one role (or none) on the map.
+const c5_focus = (key, t0) => C5_ROLES.forEach(role => tw(S.nodes[role.key].ring, { c_stroke: role.key === key ? COL.task : COL.edge }, t0, .4));
+// The title of the role in hand, to the right of the map.
+const c5_title = (p, str, t0, sub) => {
+  b_txt(p, str, 800, 252, t0, { size: 38, weight: 600, fill: COL.task, anchor: 'start' });
+  if (sub) b_txt(p, sub, 800, 286, t0 + .2, { size: 19, fill: COL.dim, anchor: 'start', font: MONO });
+};
+// The points about a role are drawn with b_point (../lib/engine.js).
+// The tile of principle i (C5_PRINC), entering at t0.
+const c5_princ = (p, i, t0) => {
+  const x = 130 + (i % 3) * 460, y = 260 + Math.floor(i / 3) * 190, g = G(p, { o: 0, y: 12 });
+  b_rect(g, x, y, 420, 160, { fill: COL.panel });
+  const look = { x: x + 26, y: y + 52, size: 21, weight: 700, font: MONO };
+  if (C5_SLUG[i]) b_term(g, C5_PRINC[i][0], C5_SLUG[i], { ...look, o: 1 });   // an English name: the narration says it in Dutch, a click plays it
+  else T(g, C5_PRINC[i][0], look);
+  C5_PRINC[i][1].forEach((str, k) => T(g, str, { x: x + 26, y: y + 98 + k * 28, size: 21, fill: COL.dim }));
+  tw(g, { o: 1, y: 0 }, t0, .5, out);
+};
+
+/* ---------- beats: [id, title, run(m, D), { ask }?] ---------- */
+const BEATS = [
+  ['intro', 'Wie doet wat?', (m, D) =>
+    b_title(m, D, 'DEEL A · HET KADER · HOOFDSTUK 5', 'Wie doet wat?', 'Rollen in de organisatie, leveranciers, principes en balans.')],
+
+  ['structuur', 'Niet alleen', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 12 · GOVERNANCE');
+    b_tabs(C5_TABS, .3); b_tab(0, .3);
+    c5_map();
+    show(S.nodes.bestuurder.g, .2);
+    b_txt(p, 'verantwoordelijk voor het beheersen van', 800, 290, .4, { size: 26, anchor: 'start' });
+    b_txt(p, 'informatiebeveiligingsrisico’s', 800, 324, .4, { size: 26, anchor: 'start' });
+    b_txt(p, 'maar niet alleen', 800, 396, m('alleen'), { size: 32, weight: 600, fill: COL.task, anchor: 'start' });
+    show(b_chip(p, 800, 430, 600, 'structuur volgens NEN-EN-ISO/IEC 27001', { col: COL.iso, fill: COL.iso, hgt: 54, size: 20 }), m('str'));
+    b_txt(p, 'drie vaste rollen bij overheden', 800, 548, m('rollen'), { size: 26, weight: 600, anchor: 'start' });
+    b_txt(p, 'en eventueel een interne toezichthouder', 800, 584, m('r4'), { size: 24, fill: COL.dim, anchor: 'start' });
+    // The structure fills in: the line, the adviser, the internal supervisor.
+    c5_focus('bestuurder', m('r1')); c5_focus(null, m('r2'));
+    show(S.nodes.lijn.g, m('r2')); show(S.links.lijn, m('r2', .2));
+    show(S.nodes.ciso.g, m('r3')); show(S.links.cisoB, m('r3', .2)); show(S.links.cisoL, m('r3', .3));
+    show(S.nodes.intern.g, m('r4')); show(S.links.intern, m('r4', .2));
+  }],
+
+  ['bestuurder', 'De bestuurder', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 12.1 · BESTUURDER');
+    c5_focus('bestuurder', .2);
+    c5_title(p, 'bestuurder', .2);
+    b_point(p, 0, ['treft passende en evenredige maatregelen', 'en ziet toe op de naleving'], m('b', .3));
+    b_point(p, 1, ['verantwoordelijk voor risicomanagement,', 'gericht op digitale weerbaarheid'], m('rm'));
+    b_point(p, 2, ['laat zich adviseren, onder meer door'], m('adv'));
+    [['CISO', 110], ['CIO', 96], ['FG · functionaris gegevensbescherming', 400]].reduce((x, [str, w], i) => {
+      show(b_chip(p, x, 516, w, str, { hgt: 44, size: 18 }), m('adv') + 1.6 + i * .6);
+      return x + w + 12;
+    }, 826);
+    b_txt(p, 'CBW ARTIKEL 24, TWAALFDE LID: WELKE BESTUURDERS', 826, 600, m('rm', .8), { size: 14, fill: COL.faint, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+  }],
+
+  ['lijn', 'Het lijnmanagement', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 12.2 · LIJNMANAGEMENT');
+    c5_focus('lijn', .2);
+    c5_title(p, 'lijnmanagement', .2);
+    b_point(p, 0, ['eigenaar van informatie en informatiesystemen'], m('l', .3));
+    b_point(p, 1, ['identificeert dreigingen en risico’s'], m('risk'));
+    b_point(p, 2, ['past beheersmaatregelen en', 'overheidsmaatregelen toe'], m('toe'));
+    b_point(p, 3, ['afwijken van een overheidsmaatregel?', 'altijd advies vragen aan de CISO'], m('advies'));
+    // The line to the CISO lights up: that is where the advice comes from.
+    tw(S.links.cisoL, { c_stroke: COL.task }, m('advies', .4), .4); tw(S.links.cisoL, { c_stroke: COL.dim }, m('advies', 3), .6);
+  }],
+
+  ['ciso', 'De CISO', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 12.3 · CISO');
+    c5_focus('ciso', .2);
+    c5_title(p, 'CISO', .2, 'Chief Information Security Officer');
+    b_point(p, 0, ['coördineert de informatiebeveiliging'], m('c', .3), 350);
+    b_point(p, 1, ['ondersteunt de bestuurder: gevraagd', 'en ongevraagd advies'], m('adv'), 350);
+    b_point(p, 2, ['vertaalt wetgeving en bedrijfsdoelstellingen', 'naar informatiebeveiligingsbeleid'], m('beleid'), 350);
+    b_point(p, 3, ['rapporteert aan het bestuur over de uitvoering', 'door de lijn en over het voldoen aan de BIO'], m('rap'), 350);
+    tw(S.links.cisoB, { c_stroke: COL.task }, m('adv', .3), .4); tw(S.links.cisoB, { c_stroke: COL.dim }, m('beleid'), .6);
+  }],
+
+  ['nietciso', 'Niet de CISO', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 12.3 · CISO');
+    const tF = m('fout'), tL = m('lijn');
+    // The misunderstanding: the label lands on the CISO, is struck out, and moves to where it belongs.
+    const tag = G(p, { x: 150, y: 286, o: 0 });
+    b_rect(tag, -122, -21, 244, 42, { fill: COL.board, stroke: COL.task, rx: 5 });
+    T(tag, 'VERANTWOORDELIJK', { y: 6, size: 17, fill: COL.task, anchor: 'middle', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    show(tag, tF, .4);
+    const cross = path(p, 'M34 286H266', { stroke: COL.bad, 'stroke-width': 4 }, { d: 0 });
+    draw(cross, tF + 2.2, .4); hide(cross, tL, .3);
+    tw(tag, { x: 588, y: 566 }, tL + .2, .9, io);
+    c5_focus('ciso', tF); c5_focus('lijn', tL + .6);
+    b_txt(p, 'de CISO is uitdrukkelijk niet verantwoordelijk', 800, 330, tF + .4, { size: 28, weight: 600, anchor: 'start' });
+    b_txt(p, 'voor informatiebeveiliging door het lijnmanagement', 800, 368, tF + .4, { size: 28, weight: 600, anchor: 'start' });
+    b_txt(p, 'die verantwoordelijkheid blijft in de lijn', 800, 460, tL + .6, { size: 30, weight: 600, fill: COL.task, anchor: 'start' });
+  }],
+
+  ['intern', 'Interne toezichthouder', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 12.4 · INTERNE TOEZICHTHOUDER');
+    c5_focus('bestuurder', .2); c5_focus('intern', m('helpt'));
+    c5_title(p, 'toezicht in de organisatie', .2);
+    b_point(p, 0, ['de bestuurder ziet toe op de toepassing', 'van informatiebeveiliging'], m('ziet', .3));
+    b_point(p, 1, ['een interne toezichthouder', 'kan daarbij helpen'], m('helpt'));
+    b_point(p, 2, ['wie dat is, laat de BIO open'], m('open'));
+    tw(S.links.intern, { c_stroke: COL.task }, m('helpt', .3), .4);
+  }],
+
+  ['q1', 'Controlevraag', () => { hide(S.panel, 0, .3); c5_focus(null, 0); tw(S.links.intern, { c_stroke: COL.dim }, 0, .3); }, { ask: done => {
+    const items = C5_ROLES.map(role => ({ el: S.nodes[role.key].g, box: role.box, label: role.lines.join(' ') }));
+    quiz(WIDE, [{
+      id: 'c-rol-1', prompt: ['Wie is eigenaar van een informatiesysteem, en daarmee verantwoordelijk voor de risico’s ervan?'],
+      build: pickEls(items, 1, 'Het lijnmanagement is eigenaar van informatie en informatiesystemen.', i => [
+        'De bestuurder is verantwoordelijk voor het geheel. Eigenaar van een informatiesysteem is het lijnmanagement.', null,
+        'De CISO coördineert en adviseert, maar is geen eigenaar. Dat is het lijnmanagement.',
+        'De interne toezichthouder helpt bij het toezicht. Eigenaar is het lijnmanagement.'][i]),
+    }, {
+      id: 'c-rol-2', prompt: ['Wie vertaalt wetgeving en bedrijfsdoelstellingen naar een informatiebeveiligingsbeleid?'],
+      build: pickEls(items, 2, 'Dat doet de CISO.', i => [
+        'De bestuurder besluit; de vertaling naar beleid maakt de CISO.',
+        'Het lijnmanagement voert het beleid uit; de CISO maakt de vertaling.', null,
+        'De interne toezichthouder helpt bij het toezicht; de vertaling naar beleid maakt de CISO.'][i]),
+    }, {
+      id: 'c-rol-3', prompt: ['Wie treft de maatregelen en ziet toe op de naleving?'],
+      build: pickEls(items, 0, 'De bestuurder treft passende en evenredige maatregelen en ziet toe op de naleving.', i => [null,
+        'Het lijnmanagement past de maatregelen toe. Het treffen ervan en het toezien op de naleving is aan de bestuurder.',
+        'De CISO adviseert en rapporteert. Verantwoordelijk is de bestuurder.',
+        'De interne toezichthouder helpt de bestuurder; verantwoordelijk blijft de bestuurder.'][i]),
+    }], done);
+  } }],
+
+  ['leveranciers', 'Leveranciers', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 13 · LEVERANCIERS');
+    hide(S.mapG, 0, .4);
+    b_tab(1, .2);
+    show(b_icon(p, 'overheid', { x: 360, y: 380, s: 1.8, o: 0 }), .2);
+    b_txt(p, 'organisatie', 360, 482, .3, { size: 26, weight: 600 });
+    show(b_icon(p, 'bedrijf', { x: 1240, y: 380, s: 1.8, o: 0 }), .3);
+    b_txt(p, 'leverancier', 1240, 482, .4, { size: 26, weight: 600 });
+    b_arrow(p, 1120, 480, 340, m('lev'));
+    b_txt(p, 'diensten en producten', 800, 318, m('lev'), { size: 22, fill: COL.dim });
+    // The risks do not travel with the contract: the chip tries, and comes back.
+    const tB = m('blijft'), tE = m('eisen');
+    const risk = b_chip(p, 270, 530, 180, 'risico’s', { col: COL.bad, fill: COL.bad, hgt: 48, bg: COL.board });
+    show(risk, tB);
+    tw(risk, { x: 330 }, tB + 1, .7, io); tw(risk, { x: 0 }, tB + 1.8, .7, back);
+    draw(path(p, 'M826 536L862 572M862 536L826 572', { stroke: COL.bad, 'stroke-width': 4 }, { d: 0 }), tB + 1.5, .3);
+    b_txt(p, 'de organisatie blijft zelf verantwoordelijk', 800, 652, tB + 2.4, { size: 30, weight: 600, fill: COL.task });
+    // So the obligations go into the purchasing requirements.
+    b_arrow(p, 480, 1120, 430, tE);
+    const req = G(p, { x: 560, y: 430, o: 0 });
+    b_rect(req, -84, -24, 168, 48, { fill: COL.board, stroke: COL.task, rx: 5 });
+    T(req, 'inkoopeisen', { y: 7, size: 21, fill: COL.task, anchor: 'middle', weight: 600 });
+    show(req, tE + .3, .3); tw(req, { x: 1030 }, tE + .5, 2, io);
+    b_txt(p, 'verplichtingen uit de BIO, afhankelijk van het risico', 800, 714, tE + 1, { size: 24 });
+  }],
+
+  ['principes', 'Principes', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 14 · INFORMATIEBEVEILIGINGSPRINCIPES');
+    b_tab(2, .2);
+    b_txt(p, 'principes vastleggen en toepassen', 800, 212, .2, { size: 32, weight: 600 });
+    [0, 1, 2].forEach(i => c5_princ(p, i, m('p' + (i + 1))));
+  }],
+
+  ['principes2', 'Principes, vervolg', (m) => {
+    // Same picture: the second row.
+    const p = S.panel;
+    [3, 4, 5].forEach(i => c5_princ(p, i, m('p' + (i + 1))));
+    b_txt(p, 'voorbeelden: de organisatie kiest haar eigen principes', 800, 674, m('etc'), { size: 24, fill: COL.dim });
+  }, { hold: true }],   // the lesson waits here: the English names can be heard before it goes on
+
+  ['balans', 'Balans', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 15 · BALANS IN DE MAATREGELENSET');
+    b_tab(3, .2);
+    b_txt(p, 'balans in de maatregelenset', 800, 208, .2, { size: 32, weight: 600 });
+    b_txt(p, 'SCHEMATISCH', 1400, 208, .6, { size: 15, fill: COL.faint, anchor: 'end', weight: 600, font: MONO }).setAttribute('letter-spacing', '1.5');
+    // Three rows, each lopsided at first; on its mark a row evens out.
+    S.seg = [];
+    C5_BAL.forEach((row, r) => {
+      const y = C5_BY(r), w = 1200 / row.names.length, t0 = m(row.mark);
+      row.names.forEach((name, k) => {
+        const x = 200 + k * w, g = G(p, { o: 0 }), full = w - 64;
+        b_rect(g, x + 6, y, w - 12, 96, { fill: COL.panel });
+        T(g, name, { x: x + 32, y: y + 40, size: row.names.length > 3 ? 19 : 22, weight: 600 });
+        mk('rect', { x: x + 32, y: y + 60, width: full, height: 14, rx: 3, fill: COL.edge }, g);
+        const bar = put(mk('rect', { x: x + 32, y: y + 60, height: 14, rx: 3, fill: COL.task, 'fill-opacity': .85 }, g), { a_width: full * row.start[k] });
+        show(g, .3 + r * .15 + k * .04);
+        tw(bar, { a_width: full * .6 }, t0 + .4 + k * .12, .8, io);
+        if (r === 1) S.seg.push(g);
+      });
+      const ok = G(p, { o: 0 });
+      b_tick(ok, 1436, y + 50);
+      show(ok, t0 + 1.4);
+    });
+  }],
+
+  ['q2', 'Controlevraag', () => {}, { ask: done => {
+    const items = C5_BAL[1].names.map((name, k) => ({ el: S.seg[k], box: [206 + k * 400, C5_BY(1), 388, 96], label: name }));
+    quiz(WIDE, [{
+      id: 'c-soort-1', prompt: ['Een training over het herkennen van phishing. Wat voor soort maatregel is dat?'],
+      build: pickEls(items, 1, 'Een training richt zich op mens en gedrag.', i => [
+        'Een procedure of afspraak hoort bij organisatie en proces. Een training richt zich op mens en gedrag.', null,
+        'Techniek zit in applicaties en systemen. Een training richt zich op mens en gedrag.'][i]),
+    }, {
+      id: 'c-soort-2', prompt: ['Een vaste procedure voor het intrekken van accounts bij vertrek. Wat voor soort maatregel is dat?'],
+      build: pickEls(items, 0, 'Een procedure hoort bij organisatie en proces.', i => [null,
+        'Mens en gedrag gaat over wat mensen weten en doen. Een vaste procedure hoort bij organisatie en proces.',
+        'De accounts zelf zijn techniek, maar de procedure die zegt wat er moet gebeuren hoort bij organisatie en proces.'][i]),
+    }, {
+      id: 'c-soort-3', prompt: ['Versleuteling van de schijf in elke laptop. Wat voor soort maatregel is dat?'],
+      build: pickEls(items, 2, 'Versleuteling is een maatregel in applicatie en techniek.', i => [
+        'Een afspraak over versleuteling zou bij organisatie en proces horen. De versleuteling zelf is techniek.',
+        'Mens en gedrag gaat over wat mensen weten en doen. Versleuteling is techniek.', null][i]),
+    }], done);
+  } }],
+
+  ['relatie', 'De grenzen van de BIO', (m) => {
+    const p = panel(0);
+    b_head(p, '§ 18 · RELATIE BIO EN ANDERE ONDERWERPEN');
+    hide(S.tabsG, 0, .4);
+    const core = G(p, { o: 0 });
+    b_rect(core, 560, 370, 480, 150, { fill: COL.task, stroke: COL.task, 'fill-opacity': .14 });
+    T(core, 'de BIO', { x: 800, y: 438, size: 34, weight: 600, fill: COL.task, anchor: 'middle' });
+    T(core, 'informatiebeveiliging', { x: 800, y: 478, size: 24, anchor: 'middle' });
+    show(core, .2);
+    // What borders on it, each with standards of its own.
+    const tB = m('buren'), tE = m('eigen'), tV = m('verwijs');
+    [[110, 385, 410, 120, 'privacybescherming', 'M560 445H524'], [560, 222, 480, 110, 'informatievoorziening', 'M800 370V336'],
+      [560, 558, 480, 110, 'beheersprocessen', 'M800 520V554'], [1080, 385, 410, 120, 'bedrijfscontinuïteit', 'M1040 445H1076']].forEach(([x, y, w, hgt, name, link], i) => {
+      const g = G(p, { o: 0 });
+      b_rect(g, x, y, w, hgt, { fill: COL.panel, stroke: COL.dim });
+      T(g, name, { x: x + w / 2, y: y + hgt / 2 + 2, size: 25, weight: 600, anchor: 'middle' });
+      show(g, tB + i * .75);
+      const own = T(g, 'EIGEN STANDAARDEN', { x: x + w / 2, y: y + hgt / 2 + 32, size: 14, fill: COL.dim, anchor: 'middle', weight: 700, font: MONO, o: 0 });
+      own.setAttribute('letter-spacing', '1.5');
+      show(own, tE + i * .15);
+      show(path(p, link, { stroke: COL.task, 'stroke-width': 3, 'stroke-dasharray': '5 5' }, { o: 0 }), tV + i * .15);
+    });
+    b_txt(p, 'de BIO werkt ze niet uit, en verwijst ernaar waar dat nuttig is', 800, 740, tV + .3, { size: 26 });
+  }],
+
+  ['wrap', 'Samenvatting', (m) => {
+    const p = panel(0);
+    b_head(p, 'SAMENVATTING');
+    b_wrap(p, [
+      ['De bestuurder is verantwoordelijk, de lijn is eigenaar.', 'Het lijnmanagement identificeert risico’s en past de maatregelen toe.', 'w1'],
+      ['De CISO coördineert en adviseert.', 'Gevraagd en ongevraagd; de verantwoordelijkheid van de lijn neemt de CISO niet over.', 'w2'],
+      ['Uitbesteden verplaatst het werk, niet het risico.', 'De verplichtingen uit de BIO gaan mee in de inkoopeisen.', 'w3'],
+      ['Principes en balans sturen de keuze van maatregelen.', 'Niet alleen techniek, en niet alleen beschermen.', 'w4'],
+    ], m);
+  }],
+
+  ['final1', 'Oefenronde 1', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-stellingen', prompt: ['Klopt het, of klopt het niet?'],
+    build: grid([
+      { parts: ['De CISO is verantwoordelijk voor de informatiebeveiliging door het lijnmanagement.'], ans: ['n'], why: 'Uitdrukkelijk niet: die verantwoordelijkheid blijft in de lijn.' },
+      { parts: ['Het lijnmanagement is eigenaar van informatie en informatiesystemen.'], ans: ['k'], why: 'En daarmee verantwoordelijk voor het identificeren van dreigingen en risico’s.' },
+      { parts: ['Wie een dienst uitbesteedt, draagt het risico over aan de leverancier.'], ans: ['n'], why: 'De organisatie blijft zelf verantwoordelijk voor het behandelen van de risico’s.' },
+      { parts: ['Wil het lijnmanagement afwijken van een overheidsmaatregel, dan vraagt het de CISO om advies.'], ans: ['k'], why: 'In alle gevallen, ook waar afwijken als bevoegdheid is genoemd.' },
+      { parts: ['De BIO werkt ook privacybescherming en bedrijfscontinuïteit uit.'], ans: ['n'], why: 'Die onderwerpen grenzen eraan en hebben eigen standaarden; de BIO verwijst ernaar.' },
+    ], KN, { multi: false, text: true }),
+  }], done, 'Oefenronde 1 van 2') }],
+
+  ['final2', 'Oefenronde 2', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-adviseurs', prompt: ['Door wie laat de bestuurder zich onder meer adviseren?'],
+    build: choice([['Alleen door de leverancier.'], ['Door de CISO, de CIO en de functionaris gegevensbescherming.'], ['Door de toezichthouder van de sector.']], 1,
+      'De bestuurder laat zich adviseren door onder meer de CISO, de CIO en de functionaris gegevensbescherming.',
+      ['Een leverancier levert diensten en producten. Advies komt onder meer van de CISO, de CIO en de functionaris gegevensbescherming.', null,
+        'De toezichthouder houdt toezicht en adviseert de bestuurder niet. Dat doen onder meer de CISO, de CIO en de functionaris gegevensbescherming.']),
+  }, {
+    id: 'p-inkoop', prompt: ['Je organisatie koopt een clouddienst in. Wat doe je met de verplichtingen uit de BIO?'],
+    build: choice([['Afhankelijk van het risico meenemen in de inkoopeisen.'], ['Niets: de leverancier is nu verantwoordelijk.'], ['Pas na een incident met de leverancier bespreken.']], 0,
+      'De organisatie blijft verantwoordelijk, dus de verplichtingen horen in de inkoopeisen.',
+      [null, 'De organisatie blijft zelf verantwoordelijk voor de risico’s van wat ze inkoopt.',
+        'Dan is het te laat: de verplichtingen horen vooraf in de inkoopeisen.']),
+  }, {
+    id: 'p-balans', prompt: ['Alle maatregelen van een organisatie zijn technisch. Wat ontbreekt er volgens de BIO?'],
+    build: choice([['Niets: techniek is het veiligst.'], ['Meer technische maatregelen.'], ['Balans: ook maatregelen voor organisatie en proces, en voor mens en gedrag.']], 2,
+      'De maatregelenset hoort in balans te zijn: organisatie en proces, mens en gedrag, applicatie en techniek.',
+      ['De BIO vraagt om balans. Alleen techniek laat organisatie en proces, en mens en gedrag liggen.',
+        'Nog meer techniek maakt de set niet evenwichtiger. Er ontbreken maatregelen voor organisatie en proces, en voor mens en gedrag.', null]),
+  }], done, 'Oefenronde 2 van 2 · vraag') }],
+
+  ['finish', 'Afgerond', () => { panel(0); }, { ask: finishCard }],
+].map(([id, title, run, extra]) => ({ id, title, run, ...extra }));
+
+boot();
+</script>
+</body>
+</html>

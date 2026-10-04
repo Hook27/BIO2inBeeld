@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mens en gebouw · BIO2 in beeld</title>
+<link rel="stylesheet" href="../lib/engine.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2314171a'/%3E%3Cpath d='M15 52V38M27 52V20M39 52V32M51 52V14' stroke='%238d959d' stroke-width='7'/%3E%3Cpath d='M7 28H57' stroke='%23c9a45c' stroke-width='4'/%3E%3C/svg%3E">
+<link rel="expect" href="#bar" blocking="render"><!-- hold the first frame until the player exists, so the page transition can run -->
+</head>
+<body>
+<script src="../lib/engine.js"></script>
+<script src="audio/nl/timings.js"></script>
+<script>
+'use strict';
+// Hoofdstuk 12: de overheidsmaatregelen 6.01.01 tot en met 7.10.03 van de BIO2 (pagina 21 tot en met 23): screening,
+// verantwoordelijkheden, bewustzijn en training, melden; beveiligde zones, waarschuwen, het token en opslagmedia.
+// The first chapter of part C. Two halves, each with its own overview and its own strip: the people controls (6.x)
+// and the physical controls (7.x). Beat ids match content/bio2/ch12/narration.nl.json. One idea per beat.
+const CHAPTER = { number: 12, title: 'De mens en de fysieke omgeving', minutes: 7, language: 'nl', next: '../ch13/' };
+
+/* ---------- chapter data (used by the helpers and inside BEATS, so defined first) ---------- */
+// The strips: a run of controls without a government measure is one dashed step.
+const C12_TABS6 = ['6.01', '6.02', '6.03', '6.04–6.07', '6.08'];
+const C12_TABS7 = ['7.01', '7.02', '7.03–7.06', '7.07', '7.08–7.09', '7.10', '7.11–7.14'];
+// The controls of ISO 27002 (topics shortened, in our own words) with their government measures in the BIO2.
+const C12_MENS = [
+  { code: '6.1', topic: ['screening'], nrs: ['6.01.01'] },
+  { code: '6.2', topic: ['arbeidsovereenkomst'], nrs: ['6.02.01'] },
+  { code: '6.3', topic: ['bewustwording,', 'opleiding en training'], nrs: ['6.03.01', '6.03.02', '6.03.03', '6.03.04'] },
+  { code: '6.4', topic: ['disciplinaire', 'procedure'], nrs: [] },
+  { code: '6.5', topic: ['na einde of wijziging', 'van het dienstverband'], nrs: [] },
+  { code: '6.6', topic: ['geheimhoudings-', 'overeenkomsten'], nrs: [] },
+  { code: '6.7', topic: ['werken op afstand'], nrs: [] },
+  { code: '6.8', topic: ['gebeurtenissen', 'melden'], nrs: ['6.08.01'] },
+];
+const C12_FYSIEK = [
+  { code: '7.1', topic: ['fysieke', 'beveiligingszones'], nrs: ['7.01.02'], note: '7.01.01 vervallen' },
+  { code: '7.2', topic: ['fysieke', 'toegangsbeveiliging'], nrs: ['7.02.01'] },
+  { code: '7.3', topic: ['kantoren, ruimten', 'en faciliteiten'], nrs: [] },
+  { code: '7.4', topic: ['fysieke beveiliging', 'monitoren'], nrs: [] },
+  { code: '7.5', topic: ['fysieke en', 'omgevingsdreigingen'], nrs: [] },
+  { code: '7.6', topic: ['werken in', 'beveiligde zones'], nrs: [] },
+  { code: '7.7', topic: ['clear desk en', 'clear screen'], nrs: ['7.07.01'] },
+  { code: '7.8', topic: ['apparatuur plaatsen', 'en beschermen'], nrs: [] },
+  { code: '7.9', topic: ['bedrijfsmiddelen', 'buiten het terrein'], nrs: [] },
+  { code: '7.10', topic: ['opslagmedia'], nrs: ['7.10.01', '7.10.02', '7.10.03'] },
+  { code: '7.11', topic: ['nutsvoorzieningen'], nrs: [] },
+  { code: '7.12', topic: ['bekabeling', 'beveiligen'], nrs: [] },
+  { code: '7.13', topic: ['onderhoud van', 'apparatuur'], nrs: [] },
+  { code: '7.14', topic: ['apparatuur verwijderen', 'of hergebruiken'], nrs: [] },
+];
+// The controls that have government measures, as cards for the two quick checks: [number, icon, label].
+const C12_Q1 = [['6.01', 'cert', ['screening']], ['6.02', 'doc', ['verantwoordelijkheden']], ['6.03', 'les', ['bewustzijn', 'en training']], ['6.08', 'proc', ['incidenten', 'melden']]];
+const C12_Q2 = [['7.01', 'schild', ['beveiligde', 'zones']], ['7.02', 'contact', ['waarschuwen']], ['7.07', 'slot', ['vergrendelen']], ['7.10', 'usb', ['opslagmedia']]];
+Object.assign(ICON, {
+  bus: 'M-40 -18H6V16H-40Z M6 -8H24L36 4V16H6 M-30 16a8 8 0 1 0 16 0a8 8 0 1 0 -16 0 M10 16a8 8 0 1 0 16 0a8 8 0 1 0 -16 0',
+});
+
+/* ---------- chapter drawing helpers (prefixed c12_; the shared b_ helpers live in ../lib/engine.js) ---------- */
+// A tile of an overview: the control's code, its topic, and its government measures or 'geen overheidsmaatregel'.
+// big: the roomy tiles of the first overview, with the chip for the guideline; t0: when the lower half appears.
+const c12_tile = (p, c, x, y, w, h, i, t0, big) => {
+  const g = G(p, { o: 0, y: 12 }), pad = big ? 24 : 16, per = big ? 2 : 3, yb = y + h - (big ? 100 : 46);
+  b_rect(g, x, y, w, h, { fill: COL.panel });
+  T(g, c.code, { x: x + pad, y: y + (big ? 52 : 40), size: big ? 34 : 28, fill: COL.iso, weight: 700, font: MONO });
+  c.topic.forEach((str, k) => T(g, str, { x: x + pad, y: y + (big ? 92 : 66) + k * (big ? 27 : 21), size: big ? 21 : 17 }));
+  tw(g, { o: 1, y: 0 }, .3 + i * .06, .5, out);
+  if (c.nrs.length) {
+    c.nrs.forEach((nr, k) => show(b_chip(g, x + pad + (k % per) * (big ? 140 : 80), yb + Math.floor(k / per) * 46, big ? 128 : 74, nr,
+      { col: COL.task, fill: COL.task, hgt: big ? 38 : 32, size: big ? 17 : 13 }), t0 + k * .08));
+    if (c.note) show(T(g, c.note, { x: x + pad + 84, y: yb + 21, size: 12, fill: COL.dim, font: MONO, o: 0 }), t0 + .6);
+  } else {
+    show(T(g, 'geen overheidsmaatregel', { x: x + pad, y: yb + (big ? 16 : 22), size: big ? 16 : 13, fill: COL.dim, font: MONO, o: 0 }), t0);
+    if (big) show(b_chip(g, x + pad, yb + 34, 256, 'richtlijn uit ISO 27002', { col: COL.iso, fill: COL.iso, hgt: 40, size: 17 }), t0 + 1.4);
+  }
+  return g;
+};
+// The staff of an organisation, on the left: three internal and two external employees. Returns the two groups, hidden.
+const c12_staff = p => [[[180, 280, 380], 330, 'interne medewerkers'], [[230, 330], 520, 'externe medewerkers']].map(([xs, y, str]) => {
+  const g = G(p, { o: 0 });
+  xs.forEach(x => b_icon(g, 'persoon', { x, y, s: 1.1 }));
+  T(g, str, { x: 280, y: y + 76, size: 22, weight: 600, anchor: 'middle' });
+  return g;
+});
+// The source line (b_source) and the cards of the quick checks (b_cards, b_cardItems) started here and moved to the
+// engine when chapter 13 needed them; so did the icon 'usb'.
+
+/* ---------- beats: [id, title, run(m, D), { ask, hold }?] ---------- */
+const BEATS = [
+  ['intro', 'Mens en gebouw', (m, D) =>
+    b_title(m, D, 'DEEL C · MENS, GEBOUW EN TECHNIEK · HOOFDSTUK 12', 'Mens en gebouw', 'Screening, bewustzijn en training; beveiligde zones en opslagmedia.')],
+
+  ['deelc', 'Deel C', (m) => {
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · HET EERSTE CIJFER VAN HET NUMMER');
+    b_txt(p, 'het eerste cijfer zegt om welk soort beheersmaatregel het gaat', 800, 222, .4, { size: 25, fill: COL.dim });
+    // The four kinds of control in ISO 27002; this chapter covers the six and the seven.
+    [['5', 'organisatorisch', '5.01 – 5.37', 'HOOFDSTUK 6 – 11', 'vijf', false], ['6', 'mensgericht', '6.01 – 6.08', 'DIT HOOFDSTUK', 'zes', true],
+      ['7', 'fysiek', '7.01 – 7.14', 'DIT HOOFDSTUK', 'zeven', true], ['8', 'technologisch', '8.01 – 8.34', 'HOOFDSTUK 13 – 15', 'acht', false]].forEach(([d, name, range, where, mark, now], i) => {
+      const x = 120 + i * 350, g = G(p, { o: 0, y: 14 });
+      b_rect(g, x, 270, 330, 330, { fill: COL.panel, stroke: now ? COL.task : COL.edge, sw: now ? 3 : 2 });
+      T(g, d, { x: x + 165, y: 396, size: 110, fill: COL.iso, weight: 700, anchor: 'middle', font: MONO });
+      T(g, name, { x: x + 165, y: 458, size: 28, weight: 600, anchor: 'middle' });
+      T(g, range, { x: x + 165, y: 498, size: 20, fill: COL.dim, anchor: 'middle', font: MONO });
+      b_caps(g, where, x + 165, 562, { fill: now ? COL.task : COL.faint, anchor: 'middle' });
+      if (!i) b_tick(g, x + 292, 306);
+      b_rise(g, m(mark));
+    });
+    b_txt(p, 'BRON INDELING: NEN-EN-ISO/IEC 27002:2022', 120, 650, 1.6, { size: 14, fill: COL.faint, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+  }],
+
+  ['mens', '6.01 tot en met 6.08', (m) => {
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 6.01 TOT EN MET 6.08');
+    // The strip of the first half: the people controls. The four without a government measure are one dashed step.
+    b_tabs(C12_TABS6, .4);
+    b_tabNone(3);
+    const tV = m('vier'), tG = m('geen');
+    let withNr = 0, without = 0;
+    C12_MENS.forEach((c, i) => c12_tile(p, c, 120 + (i % 4) * 346, 150 + (i >> 2) * 266, 320, 250, i,
+      c.nrs.length ? tV + .2 + withNr++ * .25 : tG + .2 + without++ * .15, true));
+    b_source(p, 700);
+    b_txt(p, 'samen zeven overheidsmaatregelen', 800, 752, tV + 1.6, { size: 27, weight: 600, fill: COL.task });
+  }],
+
+  ['screening', 'Screening', (m) => {
+    const p = panel(0);
+    b_head(p, '6.01.01 · SCREENING');
+    b_tab(0, .2);
+    b_kop(p, '6.01.01', 'screening');
+    const tB = m('beleid'), tV = m('vast'), tW = m('wanneer'), tK = m('kan'), tR = m('risico');
+    // The screening policy, adopted: the stamp lands on it.
+    b_rise(b_sheet(p, 120, 262, 420, 260, 'SCREENINGSBELEID', 3), tB);
+    const stamp = b_stamp(p, 330, 620, 'VASTGESTELD');
+    show(stamp, tV, .3); tw(stamp, { x: 404, y: 476 }, tV + .4, .9, io);
+    // Two moments at which a certificate of conduct can be asked for; 'can', so a dashed arrow.
+    show(b_box(p, 640, 290, 300, ['bij indiensttreding'], { hgt: 60, size: 22 }), tW);
+    show(b_box(p, 640, 366, 300, ['bij functiewijziging'], { hgt: 60, size: 22 }), tW + .9);
+    show(b_dart(p, 952, 358, 1046, 358, { stroke: COL.task, dash: true }), tK);
+    b_txt(p, 'kan', 999, 338, tK, { size: 21, weight: 600, fill: COL.task });
+    const vog = G(p, { o: 0, y: 14 });
+    b_rect(vog, 1060, 262, 400, 200, { fill: COL.panel, stroke: COL.task, sw: 3 });
+    b_icon(vog, 'cert', { x: 1130, y: 356, s: 1.2, stroke: COL.task });
+    T(vog, 'Verklaring Omtrent', { x: 1200, y: 340, size: 24, weight: 600, fill: COL.task });
+    T(vog, 'het Gedrag', { x: 1200, y: 372, size: 24, weight: 600, fill: COL.task });
+    b_caps(vog, 'VOG', 1200, 410, { fill: COL.task, size: 17 });
+    b_rise(vog, tK + .3);
+    show(b_box(p, 640, 520, 820, ['of dat gebeurt: op basis van een risicoafweging'], { col: COL.task, fill: COL.task, hgt: 70, size: 23 }), tR);
+    show(put(b_matrix(p, 1400, 555, .7), { o: 0 }), tR);
+  }],
+
+  ['gewezen', 'Verantwoordelijkheden', (m) => {
+    const p = panel(0);
+    b_head(p, '6.02.01 · VERANTWOORDELIJKHEDEN');
+    b_tab(1, .2);
+    b_kop(p, '6.02.01', 'gewezen op verantwoordelijkheden');
+    const tA = m('alle'), tW = m('wijzen'), tM = m('moment'), tT = m('toeg');
+    const [inn, ext] = c12_staff(p);
+    show(inn, tA); show(ext, tA + .8);
+    // They are pointed to their responsibilities, at two moments.
+    show(put(b_caps(p, 'GEWEZEN OP', 560, 366, { fill: COL.task }), { o: 0 }), tW);
+    show(b_box(p, 560, 380, 420, ['verantwoordelijkheden voor', 'informatiebeveiliging'], { col: COL.task, fill: COL.task, hgt: 100, size: 23 }), tW);
+    show(b_dart(p, 548, 410, 446, 350, { stroke: COL.task }), tW + .4);
+    show(b_dart(p, 548, 450, 400, 520, { stroke: COL.task }), tW + .6);
+    show(b_box(p, 560, 506, 190, ['bij aanstelling'], { hgt: 54, size: 19 }), tM);
+    show(b_box(p, 762, 506, 218, ['bij functiewisseling'], { hgt: 54, size: 19 }), tM + 1.6);
+    // What applies to them is easy to find.
+    b_rise(b_sheet(p, 1080, 300, 400, 230, 'REGELINGEN EN INSTRUCTIES', 3), tT);
+    show(put(b_tick(p, 1108, 572), { o: 0 }), tT + .8);
+    b_txt(p, 'eenvoudig toegankelijk', 1136, 580, tT + .8, { size: 23, weight: 600, fill: COL.task, anchor: 'start' });
+  }],
+
+  ['verantwoordelijk', 'Beschermen', (m) => {
+    const p = panel(0);
+    b_head(p, '6.03.01 · BEWUSTWORDING');
+    b_tab(2, .2);
+    b_kop(p, '6.03.01', 'bedrijfsinformatie beschermen');
+    const tD = m('drie'), tR = m('regels'), tU = m('rubr');
+    show(b_party(p, 1200, 322, 'schild', 'bedrijfsinformatie', { s: 1.7, lab: 96, col: COL.task }), .4);
+    // Three groups share the responsibility.
+    ['medewerkers', 'lijnmanagers', 'bestuurders'].forEach((name, k) => show(b_role(p, 250 + k * 250, 330, name, COL.task), tD + k * .5));
+    b_arrow(p, 840, 1076, 330, tD + 1.6, { stroke: COL.task });
+    b_txt(p, 'verantwoordelijk', 958, 308, tD + 1.6, { size: 20, weight: 600, fill: COL.task });
+    show(b_box(p, 170, 480, 740, ['iedereen kent de regels en verplichtingen', 'voor informatiebeveiliging'], { hgt: 96, size: 23 }), tR);
+    // Where relevant: a dashed frame.
+    const extra = b_box(p, 170, 600, 740, ['waar relevant: de speciale eisen', 'voor gerubriceerde omgevingen'], { col: COL.dim, hgt: 96, size: 22, weight: 500 });
+    extra.firstChild.setAttribute('stroke-dasharray', '8 7');
+    show(extra, tU);
+  }],
+
+  ['training', 'Training', (m) => {
+    const p = panel(0);
+    b_head(p, '6.03.02 · TRAINING');
+    b_kop(p, '6.03.02', 'training binnen drie maanden');
+    const tW = m('wie'), tT = m('train'), tD = m('drie'), x0 = 1000, step = 140;
+    show(b_party(p, 200, 350, 'persoon', 'medewerkers', { s: 1.3, lab: 80 }), tW);
+    show(b_party(p, 420, 350, 'bedrijf', 'contractanten', { s: 1.2, lab: 80 }), tW + .8);
+    b_txt(p, 'die informatiesystemen', 310, 496, tW + 1.6, { size: 20, fill: COL.dim });
+    b_txt(p, 'en -diensten gebruiken', 310, 522, tW + 1.6, { size: 20, fill: COL.dim });
+    // The training, named as the BIO2 names it.
+    b_arrow(p, 530, 616, 350, tT);
+    const tr = b_tile(p, { x: 630, y: 250, w: 280, h: 200, icon: 'les', iconY: 78, iconS: 1.4, col: COL.task });
+    put(b_chip(tr, 646, 388, 248, 'training I-bewustzijn', { col: COL.task, fill: COL.task, hgt: 40, size: 16 }), { o: 1 });
+    b_rise(tr, tT);
+    // Within three months after starting: the bar runs to the third month.
+    const line = G(p, { o: 0 });
+    path(line, `M${x0} 350H${x0 + step * 3 + 40}`, { stroke: COL.edge, 'stroke-width': 3 });
+    ['in dienst', '1', '2', '3 maanden'].forEach((str, k) => {
+      path(line, `M${x0 + k * step} 338V362`, { stroke: COL.dim, 'stroke-width': 3 });
+      T(line, str, { x: x0 + k * step, y: 394, size: 18, fill: COL.dim, anchor: 'middle', font: MONO });
+    });
+    show(line, tD - .4);
+    b_arrow(p, 922, 984, 350, tD - .4);
+    draw(path(p, `M${x0} 350H${x0 + step * 3}`, { stroke: COL.task, 'stroke-width': 9 }, { d: 0 }), tD, 1.6);
+    b_txt(p, 'binnen drie maanden na indiensttreding', x0 + step * 1.5, 470, tD + .4, { size: 22, weight: 600, fill: COL.task });
+    show(put(b_tick(p, x0 + 40, 506), { o: 0 }), tD + 2);
+    b_txt(p, 'aantoonbaar en met succes gevolgd', x0 + 64, 514, tD + 2, { size: 21, anchor: 'start' });
+  }],
+
+  ['management', 'Het management', (m) => {
+    const p = panel(0);
+    b_head(p, '6.03.03 · OPLEIDING EN TRAINING');
+    b_kop(p, '6.03.03', 'het management benadrukt en stimuleert');
+    const tB = m('belang'), tW = m('wanneer'), tV = m('bv'), tS = m('stim');
+    show(b_role(p, 220, 340, 'management', COL.task), .3);
+    b_arrow(p, 290, 396, 340, tB, { stroke: COL.task });
+    show(b_box(p, 410, 290, 400, ['het belang van opleiding', 'en training'], { col: COL.task, fill: COL.task, hgt: 100, size: 23 }), tB);
+    b_arrow(p, 822, 916, 340, tB + .8, { stroke: COL.task });
+    const staff = G(p, { o: 0 });
+    [1000, 1100, 1200].forEach(x => b_icon(staff, 'persoon', { x, y: 330, s: 1.1 }));
+    T(staff, 'medewerkers en contractanten', { x: 1100, y: 412, size: 22, weight: 600, anchor: 'middle' });
+    show(staff, tB + .8);
+    // When: two fixed moments, and two examples (dashed).
+    show(put(b_caps(p, 'BIJ', 410, 500), { o: 0 }), tW);
+    show(b_box(p, 410, 512, 190, ['aanstelling'], { hgt: 54, size: 20 }), tW);
+    show(b_box(p, 612, 512, 270, ['interne overplaatsing'], { hgt: 54, size: 20 }), tW + 1);
+    show(put(b_caps(p, 'EN BIJVOORBEELD IN', 410, 610), { o: 0 }), tV);
+    [['het werkoverleg', 410, 210], ['een personeelsgesprek', 632, 250]].forEach(([str, x, w], k) => {
+      const g = b_box(p, x, 622, w, [str], { col: COL.dim, hgt: 54, size: 20, weight: 500 });
+      g.firstChild.setAttribute('stroke-dasharray', '8 7');
+      show(g, tV + k * 1.4);
+    });
+    // And it actively encourages them to keep following training.
+    show(put(b_caps(p, 'STIMULEERT ACTIEF', 1000, 500, { fill: COL.task }), { o: 0 }), tS);
+    show(put(path(p, 'M1000 548H1440', { stroke: COL.edge, 'stroke-width': 3 }), { o: 0 }), tS);
+    [0, 1, 2, 3].forEach(k => show(put(mk('circle', { cx: 1044 + k * 118, cy: 548, r: 9, fill: COL.task }, p), { o: 0 }), tS + 1.6 + k * .3));
+    b_txt(p, 'training periodiek volgen', 1000, 604, tS + 1.2, { size: 23, weight: 600, anchor: 'start' });
+  }],
+
+  ['mobiel', 'Mobiel werken', (m) => {
+    const p = panel(0);
+    b_head(p, '6.03.04 · MOBIEL WERKEN');
+    b_kop(p, '6.03.04', 'veilig mobiel werken');
+    const tM = m('mob');
+    b_rise(b_sheet(p, 140, 270, 640, 300, 'BEWUSTWORDINGSPROGRAMMA', 2), .3);
+    show(b_box(p, 168, 420, 584, ['gedragsaspecten van', 'veilig mobiel werken'], { col: COL.task, fill: COL.task, hgt: 100, size: 24 }), tM);
+    show(b_icon(p, 'laptop', { x: 1030, y: 400, s: 1.8, o: 0 }), tM + .4);
+    show(b_icon(p, 'telefoon', { x: 1250, y: 392, s: 1.6, o: 0 }), tM + .8);
+    b_txt(p, 'mobiel werken', 1130, 520, tM + .8, { size: 23, fill: COL.dim });
+  }],
+
+  ['melden', 'De meldingsprocedure', (m) => {
+    const p = panel(0);
+    b_head(p, '6.08.01 · INCIDENTEN MELDEN');
+    b_tab(4, .2);
+    b_kop(p, '6.08.01', 'de meldingsprocedure kennen');
+    const tA = m('alle'), tP = m('proc'), tH = m('h10');
+    b_rise(b_sheet(p, 940, 270, 520, 300, 'MELDINGSPROCEDURE', 2), .3);
+    show(b_box(p, 968, 420, 464, ['informatiebeveiligingsincidenten'], { col: COL.bad, fill: COL.bad, hgt: 62, size: 22 }), .8);
+    const [inn, ext] = c12_staff(p);
+    show(inn, tA); show(ext, tA + .8);
+    // All of them have taken note of it, and that can be shown.
+    b_arrow(p, 470, 548, 430, tP, { stroke: COL.task });
+    show(b_box(p, 560, 380, 280, ['aantoonbaar', 'kennisgenomen'], { col: COL.task, fill: COL.task, hgt: 100, size: 23 }), tP);
+    b_arrow(p, 852, 926, 430, tP + .6, { stroke: COL.task });
+    show(put(b_caps(p, 'ZIE OOK HOOFDSTUK 10', 1200, 610, { anchor: 'middle' }), { o: 0 }), tH);
+  }],
+
+  ['q1', 'Controlevraag', () => {
+    // The four people controls that have government measures, as cards to point at.
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 6.01 TOT EN MET 6.08');
+    b_tab(-1, .2);
+    b_txt(p, 'de vier mensgerichte beheersmaatregelen met overheidsmaatregelen', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.cards = b_cards(p, C12_Q1);
+  }, { ask: done => {
+    const items = b_cardItems(S.cards, C12_Q1);
+    const about = ['Dat gaat over het screeningsbeleid en de VOG.', 'Dat gaat over wijzen op verantwoordelijkheden.', 'Dat gaat over bewustzijn, opleiding en training.', 'Dat gaat over de meldingsprocedure.'];
+    quiz(WIDE, [{
+      id: 'c-mens-1', prompt: ['Voor een nieuwe functie wil het waterschap een VOG vragen. Welke maatregel gaat daarover?'],
+      build: pickEls(items, 0, '6.01.01: bij indiensttreding en functiewijziging kan op basis van een risicoafweging een VOG worden gevraagd.',
+        i => about[i] + ' De VOG staat bij de screening, in 6.01.01.'),
+    }, {
+      id: 'c-mens-2', prompt: ['Een inhuurkracht werkt met het zaaksysteem. Welke maatregel vraagt een training?'],
+      build: pickEls(items, 2, '6.03.02: binnen drie maanden na indiensttreding, aantoonbaar en met succes gevolgd.',
+        i => about[i] + ' De training staat in 6.03.02.'),
+    }, {
+      id: 'c-mens-3', prompt: ['Waar staat dat alle medewerkers de meldingsprocedure voor incidenten kennen?'],
+      build: pickEls(items, 3, '6.08.01: alle medewerkers, intern en extern, hebben er aantoonbaar kennis van genomen.',
+        i => about[i] + ' De meldingsprocedure staat in 6.08.01.'),
+    }], done);
+  } }],
+
+  ['fysiek', '7.01 tot en met 7.14', (m) => {
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 7.01 TOT EN MET 7.14');
+    // The strip changes to the second half: the physical controls, with each run without a government measure as one dashed step.
+    hide(S.tabsG, 0, .3);
+    b_tabs(C12_TABS7, .4);
+    [2, 4, 6].forEach(i => b_tabNone(i));
+    const tV = m('vier'), tG = m('geen');
+    let withNr = 0, without = 0;
+    C12_FYSIEK.forEach((c, i) => c12_tile(p, c, 120 + (i % 5) * 276, 150 + Math.floor(i / 5) * 166, 264, 150, i,
+      c.nrs.length ? tV + .2 + withNr++ * .25 : tG + .2 + without++ * .08, false));
+    const sum = G(p, { o: 0 });
+    T(sum, 'samen zes', { x: 1356, y: 550, size: 23, weight: 600, fill: COL.task, anchor: 'middle' });
+    T(sum, 'overheidsmaatregelen', { x: 1356, y: 580, size: 23, weight: 600, fill: COL.task, anchor: 'middle' });
+    show(sum, tV + 1.6);
+    b_source(p, 672);
+    b_txt(p, 'zonder overheidsmaatregel geldt de richtlijn uit ISO 27002', 120, 716, tG + 1.2, { size: 20, fill: COL.iso, anchor: 'start' });
+  }],
+
+  ['zones', 'Beveiligde zones', (m) => {
+    const p = panel(0);
+    b_head(p, '7.01.02 · BEVEILIGDE ZONES');
+    b_tab(0, .2);
+    b_kop(p, '7.01.02', 'nooit via één beveiligde zone');
+    const tV = m('verv'), tE = m('een'), tT = m('twee');
+    show(b_chip(p, 1230, 158, 250, '7.01.01 · vervallen', { hgt: 40, size: 16, fill: COL.dim }), tV);
+    // Not this: the critical system behind a single zone.
+    const one = G(p, { o: 0 });
+    b_rect(one, 250, 330, 420, 280, { stroke: COL.good, sw: 3 });
+    b_caps(one, 'BEVEILIGDE ZONE', 272, 362, { fill: COL.good });
+    b_icon(one, 'server', { x: 520, y: 462, s: 1.1 });
+    T(one, 'kritiek systeem', { x: 520, y: 536, size: 21, weight: 600, anchor: 'middle' });
+    b_icon(one, 'persoon', { x: 150, y: 462, s: 1.1 });
+    show(one, .4);
+    b_arrow(p, 196, 448, 462, tE);
+    draw(path(p, 'M228 316L692 624 M692 316L228 624', { stroke: COL.bad, 'stroke-width': 5 }, { d: 0 }), tE + 3.4, .6);
+    b_txt(p, 'nooit via één zone', 460, 674, tE + 3.4, { size: 23, weight: 600, fill: COL.bad });
+    // This: more than one zone lies in between.
+    const two = G(p, { o: 0 });
+    b_rect(two, 880, 300, 580, 340, { stroke: COL.good, sw: 3 });
+    b_caps(two, 'ZONE 1', 902, 332, { fill: COL.good });
+    b_rect(two, 1060, 370, 360, 220, { stroke: COL.good, sw: 3 });
+    b_caps(two, 'ZONE 2', 1082, 402, { fill: COL.good });
+    b_icon(two, 'server', { x: 1260, y: 470, s: 1.1 });
+    T(two, 'kritiek systeem', { x: 1260, y: 544, size: 21, weight: 600, anchor: 'middle' });
+    b_icon(two, 'persoon', { x: 800, y: 470, s: 1.1 });
+    show(two, tT);
+    b_arrow(p, 846, 1188, 470, tT + .5);
+    show(put(b_tick(p, 1020, 676), { o: 0 }), tT + 1.4);
+    b_txt(p, 'door meer dan één zone', 1048, 684, tT + 1.4, { size: 23, weight: 600, fill: COL.good, anchor: 'start' });
+  }],
+
+  ['waarschuwen', 'Waarschuwen', (m) => {
+    const p = panel(0);
+    b_head(p, '7.02.01 · WAARSCHUWEN');
+    b_tab(1, .2);
+    b_kop(p, '7.02.01', 'waarschuwen bij een concreet risico');
+    const tW = m('waar'), tC = m('coll'), tA = m('afspr'), ys = [330, 460, 590];
+    show(b_party(p, 240, 480, 'overheid', 'organisatie', { s: 1.2, lab: 88 }), .3);
+    show(b_box(p, 90, 300, 300, ['concreet', 'beveiligingsrisico'], { col: COL.bad, fill: COL.bad, hgt: 84, size: 21 }), .7);
+    // Warnings go out to the relevant colleagues, schematic.
+    ys.forEach((y, k) => {
+      const g = G(p, { o: 0 });
+      path(g, `M330 470C560 470 640 ${y} 1000 ${y}`, { stroke: COL.dim, 'stroke-width': 3 });
+      put(b_chip(g, 760, y - 19, 190, 'waarschuwing', { col: COL.bad, fill: COL.bad, hgt: 38, size: 16, bg: COL.board }), { o: 1 });
+      show(g, tW + k * .3);
+      const c = G(p, { o: 0 });
+      b_icon(c, 'overheid', { x: 1070, y, s: .8 });
+      T(c, 'collega ' + 'ABC'[k], { x: 1136, y: y + 8, size: 22 });
+      show(c, tC + k * .3);
+    });
+    show(put(b_caps(p, 'RELEVANTE COLLEGA’S · BEVEILIGINGSDOMEIN VAN DE OVERHEID', 900, 262, { fill: COL.task }), { o: 0 }), tC);
+    b_txt(p, 'SCHEMATISCH', 1480, 690, tC + .6, { size: 15, fill: COL.faint, anchor: 'end', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    show(b_box(p, 470, 666, 420, ['volgens onderlinge afspraken'], { col: COL.task, fill: COL.task, hgt: 60, size: 22 }), tA);
+  }],
+
+  ['token', 'Het token', (m) => {
+    const p = panel(0);
+    b_head(p, '7.07.01 · CHIPCARDTOKEN');
+    b_tab(3, .2);
+    b_kop(p, '7.07.01', 'automatisch vergrendelen');
+    const tU = m('uit'), tS = m('slot');
+    show(b_icon(p, 'laptop', { x: 560, y: 440, s: 3.4, o: 0 }), .3);
+    // The chip card (the token) sits in the reader beside the laptop; the reader is drawn over its lower edge.
+    const card = G(p, { o: 0 });
+    b_rect(card, 860, 400, 110, 90, { fill: COL.board, stroke: COL.task, sw: 3 });
+    mk('rect', { x: 876, y: 416, width: 26, height: 20, rx: 3, fill: COL.task }, card);
+    T(card, 'chipcardtoken', { x: 915, y: 380, size: 19, fill: COL.task, anchor: 'middle', font: MONO });
+    show(card, .5);
+    const reader = G(p, { o: 0 });
+    b_rect(reader, 830, 470, 170, 70, { fill: COL.panel });
+    path(reader, 'M852 484H978', { stroke: COL.dim, 'stroke-width': 4 });
+    T(reader, 'lezer', { x: 915, y: 568, size: 19, fill: COL.dim, anchor: 'middle' });
+    show(reader, .5);
+    // The card is taken out, and the lock comes on by itself.
+    tw(card, { x: 210, y: -80 }, tU, .9, io);
+    show(b_icon(p, 'slot', { x: 560, y: 416, s: 1.6, o: 0, stroke: COL.task }), tS);
+    b_txt(p, 'vergrendeling automatisch geactiveerd', 560, 640, tS + .3, { size: 24, weight: 600, fill: COL.task });
+  }],
+
+  ['wissen', 'Media wissen', (m) => {
+    const p = panel(0);
+    S.hd = b_head(p, '7.10.01 · OPSLAGMEDIA');
+    b_tab(5, .2);
+    S.kop = b_kop(p, '7.10.01', 'verwijderbare media wissen');
+    const tI = m('instr'), tM = m('media'), tW = m('weg'), tX = m('wis');
+    // The edge of the organisation: what crosses it, leaves.
+    show(put(path(p, 'M1000 250V700', { stroke: COL.dim, 'stroke-width': 3, 'stroke-dasharray': '10 9' }), { o: 0 }), .3);
+    show(put(b_caps(p, 'DE ORGANISATIE', 980, 276, { anchor: 'end' }), { o: 0 }), .3);
+    show(put(b_caps(p, 'DAARBUITEN', 1020, 276), { o: 0 }), .3);
+    b_rise(b_sheet(p, 120, 300, 380, 260, 'VERWIJDERINSTRUCTIE', 3), tI);
+    // A removable, reusable medium with business-sensitive content.
+    const med = G(p, { o: 0 });
+    b_rect(med, 620, 400, 150, 90, { fill: COL.panel, stroke: COL.chalk, sw: 3 });
+    b_rect(med, 770, 426, 34, 38, { fill: COL.panel, stroke: COL.chalk, sw: 3, rx: 3 });
+    const bars = G(med);
+    [0, 1, 2].forEach(k => mk('rect', { x: 640, y: 420 + k * 20, width: [110, 80, 96][k], height: 10, rx: 3, fill: COL.task }, bars));
+    show(med, tM);
+    const lab = G(p, { o: 0 });   // the arrow and the labels belong to the medium where it starts; they go when it moves
+    b_arrow(lab, 512, 606, 445, tM);
+    T(lab, 'verwijderbaar en herbruikbaar', { x: 712, y: 540, size: 20, fill: COL.dim, anchor: 'middle' });
+    T(lab, 'met bedrijfsgevoelige inhoud', { x: 712, y: 568, size: 20, fill: COL.task, anchor: 'middle' });
+    show(lab, tM);
+    // It leaves the organisation: before it does, the content is removed for good.
+    hide(lab, tW, .3);
+    tw(med, { x: 150 }, tW, 1, io);
+    hide(bars, tX, .6);
+    tw(med, { x: 520 }, tX + 1.2, 1.2, io);
+    show(put(b_tick(p, 1088, 536), { o: 0 }), tX + 2.4);
+    b_txt(p, 'inhoud onherstelbaar verwijderd', 1114, 544, tX + 2.4, { size: 21, weight: 600, fill: COL.good, anchor: 'start' });
+  }],
+
+  ['controle', 'Controleren', (m) => {
+    // Same picture: it is checked that all data is gone, and a report is made of that.
+    const p = S.panel, tC = m('check'), tV = m('verslag');
+    hide(S.kop, 0, .3); hide(S.hd, 0, .3);
+    b_head(p, '7.10.02 · OPSLAGMEDIA', .3);
+    b_kop(p, '7.10.02', 'controleren en verslag maken', .3);
+    show(b_icon(p, 'loep', { x: 1200, y: 332, s: 1.2, o: 0, stroke: COL.task }), tC);
+    b_txt(p, 'gecontroleerd', 1256, 340, tC, { size: 21, weight: 600, fill: COL.task, anchor: 'start' });
+    b_down(p, 1232, 566, 606, tV, COL.task);
+    b_rise(b_sheet(p, 1100, 618, 264, 110, 'VERSLAG', 2), tV);
+  }],
+
+  ['nbv', 'Inzetadvies', (m) => {
+    const p = panel(0);
+    b_head(p, '7.10.02 · OPSLAGMEDIA');
+    b_kop(p, '7.10.02', 'producten met een positief inzetadvies');
+    const tA = m('advies'), tV = m('van'), tI = m('aivd');
+    // The product used: where possible one with a positive advice.
+    const prod = G(p, { o: 0, y: 14 });
+    b_rect(prod, 140, 330, 360, 220, { fill: COL.panel });
+    T(prod, 'product', { x: 320, y: 470, size: 30, weight: 600, anchor: 'middle' });
+    b_rise(prod, .3);
+    show(put(b_caps(p, 'WAAR MOGELIJK', 140, 312, { fill: COL.task }), { o: 0 }), .9);
+    const stamp = b_stamp(p, 320, 640, 'POSITIEF INZETADVIES', 300);
+    show(stamp, tA, .3); tw(stamp, { y: 384 }, tA + .5, .9, io);
+    // Who gives that advice: a unit of a bureau of a service. The outer frames are drawn first, so they lie behind.
+    const box = (x, y, w, h, t0, col = COL.edge) => {
+      const g = G(p, { o: 0 });
+      b_rect(g, x, y, w, h, { fill: COL.panel, stroke: col, sw: col === COL.edge ? 2 : 3 });
+      show(g, t0);
+      return g;
+    };
+    const aivd = box(700, 262, 780, 400, tI);
+    T(aivd, 'Algemene Inlichtingen- en Veiligheidsdienst', { x: 728, y: 308, size: 22, weight: 600 });
+    T(aivd, 'AIVD', { x: 1452, y: 308, size: 19, fill: COL.dim, anchor: 'end', font: MONO });
+    const nbv = box(740, 340, 700, 290, tV + 1.8);
+    T(nbv, 'Nationaal Bureau voor Verbindingsbeveiliging', { x: 768, y: 386, size: 22, weight: 600 });
+    T(nbv, 'NBV', { x: 1412, y: 386, size: 19, fill: COL.dim, anchor: 'end', font: MONO });
+    const unit = box(780, 430, 620, 160, tV, COL.task);
+    T(unit, 'Unit Weerbaarheid', { x: 808, y: 522, size: 28, weight: 600, fill: COL.task });
+    b_arrow(p, 768, 514, 510, tV + .4, { stroke: COL.task });
+    b_txt(p, 'advies', 640, 492, tV + .4, { size: 20, weight: 600, fill: COL.task });
+  }],
+
+  ['koerier', 'Transport', (m) => {
+    const p = panel(0);
+    b_head(p, '7.10.03 · OPSLAGMEDIA');
+    b_kop(p, '7.10.03', 'koeriers en transporteurs');
+    const tK = m('koerier'), tE = m('eisen');
+    show(b_party(p, 220, 500, 'overheid', 'organisatie', { s: 1.2, lab: 88 }), .3);
+    show(b_party(p, 1380, 500, 'bedrijf', 'bestemming', { s: 1.3, lab: 88 }), .3);
+    show(put(path(p, 'M330 542H1280', { stroke: COL.edge, 'stroke-width': 3 }), { o: 0 }), .3);
+    // The courier carries classified information from one to the other.
+    const van = G(p, { o: 0 });
+    b_icon(van, 'bus', { x: 440, y: 500, s: 1.5 });
+    put(b_chip(van, 305, 412, 270, 'geclassificeerde informatie', { col: COL.task, fill: COL.task, hgt: 40, size: 15, bg: COL.board }), { o: 1 });
+    T(van, 'koerier of transporteur', { x: 440, y: 586, size: 20, fill: COL.dim, anchor: 'middle' });
+    show(van, tK); tw(van, { x: 620 }, tK + .8, 5, io);
+    // The reliability requirements, drawn up beforehand, which the courier meets.
+    b_rise(b_sheet(p, 560, 250, 480, 124, 'BETROUWBAARHEIDSEISEN', 1), tE);
+    show(put(b_caps(p, 'VOORAF OPGESTELD', 1012, 290, { fill: COL.task, anchor: 'end' }), { o: 0 }), tE + .4);
+    show(put(b_tick(p, 602, 346), { o: 0 }), tE + 1.6);
+    b_txt(p, 'het transport voldoet eraan', 628, 354, tE + 1.6, { size: 20, weight: 600, fill: COL.good, anchor: 'start' });
+  }],
+
+  ['q2', 'Controlevraag', () => {
+    // The four physical controls that have government measures, as cards to point at.
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 7.01 TOT EN MET 7.14');
+    b_tab(-1, .2);
+    b_txt(p, 'de vier fysieke beheersmaatregelen met overheidsmaatregelen', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.cards = b_cards(p, C12_Q2);
+  }, { ask: done => {
+    const items = b_cardItems(S.cards, C12_Q2);
+    const about = ['Dat gaat over beveiligde zones.', 'Dat gaat over waarschuwingen aan collega’s.', 'Dat gaat over vergrendelen bij een chipcardtoken.', 'Dat gaat over opslagmedia.'];
+    quiz(WIDE, [{
+      id: 'c-fysiek-1', prompt: ['Een herbruikbare usb-schijf verlaat de organisatie. Welke maatregel geldt?'],
+      build: pickEls(items, 3, '7.10.01 en 7.10.02: de inhoud is onherstelbaar verwijderd; dat wordt gecontroleerd en in een verslag vastgelegd.',
+        i => about[i] + ' Media die de organisatie verlaten staan in 7.10.01.'),
+    }, {
+      id: 'c-fysiek-2', prompt: ['Een kritiek systeem staat in een ruimte direct achter de receptie. Welke maatregel geldt?'],
+      build: pickEls(items, 0, '7.01.02: kritieke informatie of informatiesystemen zijn nooit via één beveiligde zone te bereiken.',
+        i => about[i] + ' Het aantal zones staat in 7.01.02.'),
+    }, {
+      id: 'c-fysiek-3', prompt: ['Een medewerker haalt de chipkaart uit de lezer en loopt weg. Welke maatregel geldt?'],
+      build: pickEls(items, 2, '7.07.01: bij het verwijderen van het token wordt de vergrendeling automatisch geactiveerd.',
+        i => about[i] + ' Het automatisch vergrendelen staat in 7.07.01.'),
+    }], done);
+  } }],
+
+  ['wrap', 'Samenvatting', (m) => {
+    const p = panel(0);
+    b_head(p, 'SAMENVATTING');
+    hide(S.tabsG, 0, .4);
+    b_wrap(p, [
+      ['Medewerkers kennen hun verantwoordelijkheden.', 'Gewezen bij aanstelling en functiewisseling; er is een vastgesteld screeningsbeleid.', 'w1'],
+      ['Training binnen drie maanden na indiensttreding.', 'Het management benadrukt het belang en stimuleert periodiek volgen.', 'w2'],
+      ['Kritieke systemen: nooit via één beveiligde zone.', 'En bij een concreet risico gaan waarschuwingen naar relevante collega’s.', 'w3'],
+      ['Media die de organisatie verlaten: onherstelbaar gewist.', 'Gecontroleerd, en vastgelegd in een verslag.', 'w4'],
+    ], m);
+  }],
+
+  ['final1', 'Oefenronde 1', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-stellingen', prompt: ['Klopt het, of klopt het niet?'],
+    build: grid([
+      { parts: ['Een VOG wordt bij elke indiensttreding gevraagd.'], ans: ['n'], why: 'Er staat “kan”: op basis van een risicoafweging kan een VOG worden gevraagd.' },
+      { parts: ['Ook externe medewerkers worden gewezen op hun verantwoordelijkheden.'], ans: ['k'], why: 'Alle medewerkers, intern en extern, bij aanstelling of functiewisseling.' },
+      { parts: ['De bewustzijnstraining moet binnen een jaar na indiensttreding zijn gevolgd.'], ans: ['n'], why: 'Binnen drie maanden na indiensttreding, aantoonbaar en met succes.' },
+      { parts: ['Een kritiek informatiesysteem mag via één beveiligde zone bereikbaar zijn.'], ans: ['n'], why: 'Nooit via één beveiligde zone.' },
+      { parts: ['Van de controle of een medium is gewist, wordt verslag gemaakt.'], ans: ['k'], why: 'Er wordt gecontroleerd of alle data onherstelbaar verwijderd is, en daarvan wordt verslag gemaakt.' },
+    ], KN, { multi: false, text: true }),
+  }], done, 'Oefenronde 1 van 2') }],
+
+  ['final2', 'Oefenronde 2', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-wie', prompt: ['Wie heeft de verantwoordelijkheid om bedrijfsinformatie te beschermen?'],
+    build: choice([['Alleen de CISO.'], ['Alle medewerkers, lijnmanagers en bestuurders.'], ['Alleen het management.']], 1,
+      'En iedereen kent de regels en verplichtingen voor informatiebeveiliging.',
+      ['Niet alleen de CISO: alle medewerkers, lijnmanagers en bestuurders hebben die verantwoordelijkheid.', null,
+        'Niet alleen het management: alle medewerkers, lijnmanagers en bestuurders hebben die verantwoordelijkheid.']),
+  }, {
+    id: 'p-token', prompt: ['Wat gebeurt er als je het chipcardtoken uit de lezer haalt?'],
+    build: choice([['De vergrendeling wordt automatisch geactiveerd.'], ['Er gaat een melding naar het meldloket.'], ['Niets, tot je zelf uitlogt.']], 0,
+      'Zo staat het in 7.07.01.',
+      [null, 'Dat vraagt de maatregel niet. De vergrendeling wordt automatisch geactiveerd.',
+        'Je hoeft zelf niets te doen: de vergrendeling wordt automatisch geactiveerd.']),
+  }, {
+    id: 'p-management', prompt: ['Wat doet het management volgens 6.03.03?'],
+    build: choice([['Het volgt zelf elke maand een training.'], ['Het controleert de VOG van elke medewerker.'], ['Het benadrukt het belang van opleiding en stimuleert die periodiek te volgen.']], 2,
+      'Bij aanstelling en interne overplaatsing, en bijvoorbeeld in het werkoverleg of in een personeelsgesprek.',
+      ['Dat staat er niet. Het management benadrukt het belang van opleiding en training, en stimuleert die periodiek te volgen.',
+        'De VOG hoort bij de screening. Het management benadrukt het belang van opleiding en training.', null]),
+  }], done, 'Oefenronde 2 van 2 · vraag') }],
+
+  ['finish', 'Afgerond', () => { panel(0); }, { ask: finishCard }],
+].map(([id, title, run, extra]) => ({ id, title, run, ...extra }));
+
+boot();
+</script>
+</body>
+</html>

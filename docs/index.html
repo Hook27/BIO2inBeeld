@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+// Observe aborted incoming transitions before the first rendering opportunity.
+addEventListener('pagereveal', e => e.viewTransition?.ready.catch(() => {}));
+</script>
+<title>BIO2 in beeld</title>
+<meta name="description" content="De Baseline Informatiebeveiliging Overheid 2 uitgelegd in bewegend beeld, met gesproken toelichting en korte vragen.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2314171a'/%3E%3Cpath d='M15 52V38M27 52V20M39 52V32M51 52V14' stroke='%238d959d' stroke-width='7'/%3E%3Cpath d='M7 28H57' stroke='%23c9a45c' stroke-width='4'/%3E%3C/svg%3E">
+<script src="unit-art.js"></script>
+<link rel="expect" href="#ch01" blocking="render">
+<style>
+:root {
+  /* Forensic theme, the same as the lesson stage: graphite ground, muted accents, monospace for numbers and codes. */
+  --page: #0a0c0e; --board: #14171a; --panel: #1b1f24; --edge: #2e353c;
+  --chalk: #d8d5cc; --dim: #8d959d; --faint: #555d65; --task: #c9a45c; --quiz: #7fa6bd; --good: #7fb596;
+  --ui: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 90px; }
+body { margin: 0; min-height: 100svh; background: var(--board); color: var(--chalk); font: 18px/1.5 var(--ui); }
+/* The same fine raster and vignette as the lesson stage. */
+body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 42%, transparent 55%, rgba(0, 0, 0, .4)),
+    linear-gradient(rgba(216, 213, 204, .035) 1px, transparent 1px) 0 0 / 80px 80px,
+    linear-gradient(90deg, rgba(216, 213, 204, .035) 1px, transparent 1px) 0 0 / 80px 80px; }
+a { color: inherit; }
+a:focus-visible { outline: 3px solid var(--task); outline-offset: 3px; }
+.kicker { margin: 0; font: 600 14px var(--mono); letter-spacing: .18em; text-transform: uppercase; color: var(--quiz); }
+
+/* ---------- cover ---------- */
+#cover { position: relative; min-height: 100svh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 48px 16px 64px; text-align: center; overflow: hidden; }
+.open #cover, body:not(.open) #contents { display: none; }
+#cover > * { animation: rise .8s var(--ease) backwards; }
+#cover .emblem { animation: none; margin-bottom: 30px; view-transition-name: guide; }
+#cover .kicker { animation-delay: .9s; }
+#cover h1 { animation-delay: 1s; }
+#cover .lede { animation-delay: 1.12s; }
+#cover .acts { animation-delay: 1.24s; }
+#cover .meta { animation-delay: 1.36s; }
+#cover .source { animation-delay: 1.48s; }
+h1 { margin: 16px 0 18px; font: 600 clamp(44px, 8.4vw, 92px)/1.02 var(--ui); letter-spacing: -.02em; view-transition-name: book; }
+h1 i { color: var(--task); font-style: normal; }
+.lede { max-width: 34em; margin: 0 0 34px; color: var(--dim); font-size: clamp(17px, 2.2vw, 20px); text-wrap: balance; }
+.acts { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.btn { display: inline-flex; align-items: center; gap: 12px; padding: 14px 28px; border-radius: 7px; font-weight: 600; font-size: 19px; text-decoration: none;
+  transition: transform .25s var(--ease), background-color .25s, border-color .25s; }
+.btn[hidden] { display: none; }
+.btn:hover { transform: translateY(-2px); }
+.btn.go { background: var(--chalk); color: var(--board); }
+.btn.quiet { border: 1.5px solid var(--edge); color: var(--chalk); }
+.btn.quiet:hover { border-color: var(--dim); }
+.btn svg { width: 15px; height: 15px; fill: currentColor; }
+.meta { margin: 30px 0 0; color: var(--dim); font: 14px var(--mono); letter-spacing: .06em; }
+.source { max-width: 46em; margin: 14px 0 0; color: var(--faint); font-size: 14px; text-wrap: balance; }
+/* Faint terms from the book around the edges of the cover. */
+.chalk { position: absolute; inset: 0; z-index: -1; pointer-events: none; animation: none !important; }
+.chalk span { position: absolute; font: 400 clamp(15px, 1.9vw, 22px) var(--mono); letter-spacing: .08em; color: var(--chalk); opacity: 0; white-space: nowrap;
+  animation: chalk 1.6s ease-out forwards, drift 14s ease-in-out infinite alternate; animation-delay: calc(var(--d) * 1s), calc(var(--d) * 1s); }
+@keyframes chalk { to { opacity: .1; } }
+@keyframes drift { to { translate: 0 -10px; } }
+@keyframes rise { from { opacity: 0; transform: translateY(16px); } }
+
+/* ---------- the emblem: four bars of unequal height and the baseline ---------- */
+.emblem { display: block; overflow: visible; }
+.emblem .bar { fill: var(--dim); fill-opacity: .55; }
+.emblem .base { fill: none; stroke: var(--task); stroke-width: 5; stroke-linecap: round; }
+.emblem .up { fill: var(--task); fill-opacity: .85; }
+.draw .bar { transform-box: fill-box; transform-origin: bottom; animation: grow .7s var(--ease) backwards; animation-delay: calc(var(--k) * 90ms + 150ms); }
+.draw .base { stroke-dasharray: 1 1; animation: draw 1s cubic-bezier(.6, 0, .3, 1) .7s backwards; }
+.draw .up { transform-box: fill-box; transform-origin: bottom; animation: grow .7s var(--ease) 1.5s backwards; }
+@keyframes grow { from { transform: scaleY(0); } }
+@keyframes draw { from { stroke-dashoffset: 1; } }
+
+/* ---------- contents ---------- */
+.top { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 14px; padding: 12px max(16px, calc(50% - 590px));
+  background: rgba(16, 19, 22, .88); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid #252b31; }
+.home { display: flex; align-items: center; gap: 12px; text-decoration: none; border-radius: 6px; }
+.home .emblem { view-transition-name: guide; }
+.home strong { font: 600 22px/1.1 var(--ui); letter-spacing: -.01em; view-transition-name: book; }
+.home strong i { color: var(--task); font-style: normal; }
+.prog { margin-left: auto; color: var(--dim); font: 14px var(--mono); white-space: nowrap; }
+.prog b { color: var(--good); font-weight: 600; }
+main#contents { padding-bottom: 80px; }
+.unit { position: relative; max-width: 1212px; margin: 0 auto; padding: 28px 16px 0; }
+.unit h2 { position: relative; display: flex; align-items: baseline; gap: 14px; min-height: 168px; margin: 0 0 16px; padding-top: 130px; font: 600 28px/1.2 var(--ui); letter-spacing: -.01em; }
+.unit .grid { position: relative; }
+/* Each unit header is a strip of the board with a sketch of its subject, drawn in the unit colour. */
+.unit::before { content: ""; position: absolute; inset: 0 16px auto; height: 208px; border-radius: 10px; pointer-events: none;
+  background: radial-gradient(ellipse 46% 90% at 74% 55%, color-mix(in srgb, var(--c) 9%, transparent), transparent 70%); }
+.unit-art { position: absolute; top: 20px; right: 28px; width: min(580px, 56%); height: auto; overflow: visible; pointer-events: none;
+  color: var(--c); fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; opacity: .85; }
+.unit-art text { fill: currentColor; stroke: none; font-family: var(--mono); letter-spacing: .08em; }
+.unit-art .a { color: var(--dim); }
+.unit-art rect.a { fill-opacity: .45; }
+.unit-art .faint { opacity: .22; }
+.unit-art .d { stroke-dasharray: 1 1; stroke-dashoffset: 1; }
+.unit-art .t { opacity: 0; }
+.seen .unit-art .d { animation: art-draw 1.1s cubic-bezier(.5, 0, .3, 1) forwards; animation-delay: calc(var(--k) * 55ms + 120ms); }
+.seen .unit-art .t { animation: art-fade .6s ease-out forwards; animation-delay: calc(var(--k) * 55ms + 300ms); }
+@keyframes art-draw { to { stroke-dashoffset: 0; } }
+@keyframes art-fade { to { opacity: 1; } }
+/* After the drawing, each sketch keeps one small motion that belongs to its topic. */
+.unit-art .lift { transform-box: fill-box; transform-origin: bottom; fill-opacity: .85; }
+.seen .unit-art .lift { animation: art-fade .4s ease-out 1.4s forwards, lift 6s var(--ease) 1.4s infinite; }
+@keyframes lift { 0% { transform: scaleY(0); } 22%, 86% { transform: scaleY(1); } 100% { transform: scaleY(0); } }
+.unit h2 span { font: 600 13px var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--c); white-space: nowrap; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr)); gap: 12px; }
+.ch { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 1fr auto; column-gap: 16px; row-gap: 8px; min-height: 112px;
+  padding: 16px 18px 14px 16px; border-radius: 8px; background: var(--panel); border: 1.5px solid var(--edge); border-left: 5px solid var(--c);
+  text-decoration: none; transition: transform .3s var(--ease), border-color .3s, box-shadow .3s; }
+.ch:hover { transform: translateY(-3px); border-color: var(--c); box-shadow: 0 14px 34px rgba(0, 0, 0, .35); }
+.ch b { grid-row: span 2; min-width: 1.6em; font: 600 34px/1.1 var(--mono); color: var(--c); font-variant-numeric: lining-nums tabular-nums; }
+.ch span { font-size: 18px; line-height: 1.3; }
+.ch small { color: var(--dim); font: 13px var(--mono); }
+.ch.done small::before { content: "✓ Afgerond · "; color: var(--good); font-weight: 600; }
+.ch.last small::after { content: " · Laatst geopend"; color: var(--quiz); }
+.ch.here:focus-visible { outline-color: var(--c); }
+.ch.here { animation: here 1.8s ease-out .3s; }
+@keyframes here { 0% { box-shadow: 0 0 0 0 var(--c); } 25% { box-shadow: 0 0 0 5px var(--c); } 100% { box-shadow: 0 0 0 14px transparent; } }
+.stagger .top { animation: rise .6s var(--ease) backwards; }
+.stagger .unit h2, .stagger .ch { animation: rise .6s var(--ease) backwards; animation-delay: calc(min(var(--i), 14) * 32ms + 80ms); }
+.pending { max-width: 1212px; margin: 34px auto 0; padding: 0 16px; color: var(--faint); font: 14px var(--mono); letter-spacing: .04em; }
+
+/* ---------- page-to-page motion ---------- */
+@view-transition { navigation: auto; }
+::view-transition-group(*) { animation-duration: .5s; animation-timing-function: var(--ease); }
+::view-transition-old(lesson), ::view-transition-new(lesson) { height: 100%; object-fit: cover; }
+::view-transition-old(lesson) { animation-duration: .18s; }
+@media (max-width: 560px) {
+  .home strong { font-size: 18px; }
+  #contents .top { flex-wrap: wrap; gap: 8px 12px; }
+  .unit-art { width: calc(100% - 32px); right: 16px; opacity: .32; }
+  .unit h2 { min-height: 0; padding-top: 104px; }
+  .ch { min-height: 0; }
+  .chalk { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; transition: none !important; }
+  .unit-art .d { stroke-dashoffset: 0; }
+  .unit-art .t { opacity: 1; }
+  .chalk span { opacity: .1; }
+}
+</style>
+</head>
+<body>
+<section id="cover">
+  <div class="chalk" aria-hidden="true"><!-- a few faint terms from the BIO2 -->
+    <span style="left:6%;top:12%;--d:1.6">beschikbaarheid · integriteit · vertrouwelijkheid</span>
+    <span style="right:7%;top:19%;--d:1.9">5.17.01</span>
+    <span style="left:5%;bottom:19%;--d:2.2">opzet · bestaan · werking</span>
+    <span style="right:6%;bottom:13%;--d:2.5">NEN-EN-ISO/IEC 27001</span>
+  </div>
+  <svg class="emblem draw" width="210" height="147" data-emblem></svg>
+  <p class="kicker">Geanimeerd boek</p>
+  <h1>BIO<i>2</i> in beeld</h1>
+  <p class="lede">De Baseline Informatiebeveiliging Overheid 2, stap voor stap uitgelegd in bewegend beeld. Met gesproken toelichting en korte vragen in het beeld zelf.</p>
+  <div class="acts">
+    <a class="btn go" href="#contents">Open het boek<svg viewBox="0 0 16 16"><path d="M6 2.5 11.5 8 6 13.5 4.6 12.1 8.7 8 4.6 3.9z"/></svg></a>
+    <a class="btn quiet" id="resume" hidden></a>
+  </div>
+  <p class="meta" id="meta"></p>
+  <p class="source">Uitleg bij de Baseline Informatiebeveiliging Overheid 2, versie 1.3 definitief van 9 januari 2026. Dit is geen officiële publicatie; de tekst van de BIO2 zelf is leidend.</p>
+</section>
+
+<main id="contents">
+  <header class="top">
+    <a class="home" href="#book" aria-label="Terug naar de omslag"><svg class="emblem" width="52" height="36" data-emblem></svg><strong>BIO<i>2</i> in beeld</strong></a>
+    <span class="prog" id="prog"></span>
+  </header>
+  <div id="units"></div>
+  <p class="pending" id="pending"></p>
+</main>
+
+<script>
+'use strict';
+// Chapters are numbered in order through the units. Add a chapter here when its lesson is ready.
+const UNITS = [   // [unit title, [[chapter title, minutes], ...]]
+  ['Het kader', [['Waarom de BIO?', 7], ['Wat is verplicht? Het managementsysteem', 8], ['Risico’s in vijf stappen', 9], ['Nooit klaar: verbeteren, verantwoorden, toezicht en de Cbw', 8], ['Wie doet wat? Rollen, leveranciers en principes', 7]]],
+  ['Maatregelen voor de organisatie', [['Deel 2 lezen; beleid, rollen en scholing', 8], ['Weten wat je hebt en hoe je het deelt', 7], ['Toegang: accounts, MFA en rechten', 7], ['Leveranciers en de keten', 7], ['Incidenten: melden, oplossen, leren', 6], ['Continuïteit, bewaren en verantwoorden', 6]]],
+  ['Mens, gebouw en techniek', [['De mens en de fysieke omgeving', 7], ['Apparaten, malware en kwetsbaarheden', 8], ['Back-up, logging en monitoring', 7], ['Netwerk, cryptografie en veilig veranderen', 8]]],
+];
+const PLANNED = 15;   // chapters in the whole book (books/bio2/chapters.md)
+const HUES = ['#c9a45c', '#7fa6bd', '#9a93b8'];
+const id = n => 'ch' + String(n).padStart(2, '0');
+let P = {};
+const BOOK_PROGRESS_KEY = 'animebook:progress:' + new URL('.', location.href).pathname;
+try {
+  const saved = JSON.parse(localStorage.getItem(BOOK_PROGRESS_KEY) || '{}');
+  if (saved && typeof saved === 'object' && !Array.isArray(saved)) P = saved;
+} catch {}
+const done = new Set(Array.isArray(P.done) ? P.done.filter(n => Number.isInteger(n) && n > 0) : []);
+
+// Contents.
+let n = 0, total = 0, i = 0;   // i staggers the entrance, in reading order
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+document.getElementById('units').innerHTML = UNITS.map(([name, chs], u) => {
+  return `<section class="unit" style="--c:${HUES[u % HUES.length]};--i:${i++}"><svg class="unit-art" viewBox="0 0 600 180" aria-hidden="true">${UNIT_ART[u] || ''}</svg><h2><span>Deel ${String.fromCharCode(65 + u)}</span>${esc(name)}</h2><div class="grid">` +
+    chs.map(([t, min]) => { n++;
+      const cls = 'ch' + (done.has(n) ? ' done' : '') + (P.last === n ? ' last' : '');
+      return `<a class="${cls}" id="${id(n)}" href="${id(n)}/" style="--i:${i++}"><b>${String(n).padStart(2, '0')}</b><span>${esc(t)}</span><small>${min} min</small></a>`;
+    }).join('') + '</div></section>';
+}).join('');
+total = n;
+// A unit's sketch draws itself the first time the unit scrolls into view.
+const seen = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('seen'); seen.unobserve(e.target); } }), { threshold: .25 });
+document.querySelectorAll('.unit').forEach(u => seen.observe(u));
+const finished = [...done].filter(k => k <= total).length;
+const chapters = k => `${k} hoofdstuk${k === 1 ? '' : 'ken'}`;
+document.getElementById('prog').innerHTML = finished ? `<b>${finished}</b> van ${total} afgerond` : chapters(total);
+document.getElementById('meta').textContent = total >= PLANNED ? `${chapters(total)} · met geluid` : `${total} van ${PLANNED} hoofdstukken gereed · met geluid`;
+document.getElementById('pending').textContent = total >= PLANNED ? '' : PLANNED - total === 1 ? 'Het laatste hoofdstuk volgt.' : `De overige ${chapters(PLANNED - total)} volgen.`;
+const last = Number.isInteger(P.last) && document.getElementById(id(P.last));
+if (last) {
+  const r = document.getElementById('resume');
+  r.hidden = false;
+  r.href = last.getAttribute('href');
+  r.textContent = `Verder · Hoofdstuk ${P.last}`;
+}
+
+// The emblem: four organisations of unequal level and the baseline that the lower ones are lifted to.
+for (const svg of document.querySelectorAll('svg[data-emblem]')) {
+  svg.setAttribute('viewBox', '0 0 120 84');
+  svg.setAttribute('aria-hidden', 'true');
+  const bars = [[16, 30], [42, 58], [68, 38], [94, 70]];   // [centre x, height]; the baseline is at height 46
+  svg.innerHTML = bars.map(([x, h], k) => `<rect class="bar" style="--k:${k}" x="${x - 9}" y="${78 - h}" width="18" height="${h}" rx="1.5"/>`).join('') +
+    bars.filter(([, h]) => h < 46).map(([x, h]) => `<rect class="up" x="${x - 9}" y="32" width="18" height="${46 - h}" rx="1.5"/>`).join('') +
+    '<path class="base" pathLength="1" d="M2 32H118"/>';
+}
+
+// The cover and the contents share this page: no hash or #book shows the cover, #contents or #chNN the contents.
+// Lessons link back with #chNN, so the reader lands on the chapter they just left.
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function show(animate) {
+  const open = location.hash.length > 1 && location.hash !== '#book';
+  const apply = () => {
+    document.body.classList.toggle('open', open);
+    document.body.classList.toggle('stagger', animate && open);
+    const here = open ? document.getElementById(location.hash.slice(1)) : null;
+    document.querySelectorAll('.here').forEach(e => e.classList.remove('here'));
+    if (here?.classList.contains('ch')) { here.scrollIntoView({ block: 'center' }); here.classList.add('here'); }
+    else scrollTo(0, 0);
+    if (animate) {
+      const heading = document.querySelector(open ? '#contents .home' : '#cover h1');
+      heading?.setAttribute('tabindex', '-1');
+      heading?.focus({ preventScroll: true });
+    }
+  };
+  if (animate && document.startViewTransition && !reduced) {
+    const transition = document.startViewTransition(apply);
+    // Navigation can interrupt either promise; the new view is already applied.
+    transition.ready.catch(() => {});
+    transition.finished.catch(() => {});
+  } else apply();
+}
+addEventListener('hashchange', () => show(true));
+show(false);
+
+// Between pages, the chosen card grows into the lesson frame and the frame shrinks back into its card.
+let named = null;
+const name = el => {
+  if (named) named.style.viewTransitionName = '';
+  named = el;
+  if (el) el.style.viewTransitionName = 'lesson';
+};
+document.addEventListener('click', e => { const a = e.target.closest('a[href^="ch"]'); if (a) name(a); });
+addEventListener('pagereveal', e => {
+  const target = (location.hash.length > 1 && document.getElementById(location.hash.slice(1))?.closest('.ch')) || (named?.offsetParent && named);
+  name(e.viewTransition && target ? target : null);
+  e.viewTransition?.finished.then(() => name(null), () => name(null));
+});
+</script>
+</body>
+</html>

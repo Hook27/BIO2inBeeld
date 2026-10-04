@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leveranciers en de keten · BIO2 in beeld</title>
+<link rel="stylesheet" href="../lib/engine.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2314171a'/%3E%3Cpath d='M15 52V38M27 52V20M39 52V32M51 52V14' stroke='%238d959d' stroke-width='7'/%3E%3Cpath d='M7 28H57' stroke='%23c9a45c' stroke-width='4'/%3E%3C/svg%3E">
+<link rel="expect" href="#bar" blocking="render"><!-- hold the first frame until the player exists, so the page transition can run -->
+</head>
+<body>
+<script src="../lib/engine.js"></script>
+<script src="audio/nl/timings.js"></script>
+<script>
+'use strict';
+// Hoofdstuk 9: de overheidsmaatregelen 5.19.01 tot en met 5.23.01 van de BIO2 (pagina 18 en 19): eisen bij de inkoop,
+// afspraken in het contract, de keten van toeleveranciers, het beoordelen van leveranciers en clouddiensten.
+// Beat ids match content/bio2/ch09/narration.nl.json. One idea per beat. The organisation is always on the left,
+// the supplier on the right, its own suppliers behind it.
+const CHAPTER = { number: 9, title: 'Leveranciers en de keten', minutes: 7, language: 'nl', next: '../ch10/' };
+
+/* ---------- chapter data (used by the helpers and inside BEATS, so defined first) ---------- */
+const C9_TABS = ['5.19', '5.20', '5.21', '5.22', '5.23'];
+// Five controls of ISO 27002 (topics shortened, in our own words) with their government measures in the BIO2.
+const C9_CTRL = [
+  { code: '5.19', topic: ['leveranciers-', 'relaties'], nrs: ['5.19.01'] },
+  { code: '5.20', topic: ['leveranciers-', 'overeenkomsten'], nrs: ['5.20.01', '5.20.02', '5.20.03', '5.20.04', '5.20.05', '5.20.06'] },
+  { code: '5.21', topic: ['de ICT-', 'toeleveringsketen'], nrs: ['5.21.02', '5.21.03', '5.21.04', '5.21.05'], gone: '5.21.01 vervallen' },
+  { code: '5.22', topic: ['leveranciers', 'beoordelen'], nrs: ['5.22.01', '5.22.02'] },
+  { code: '5.23', topic: ['gebruik van', 'clouddiensten'], nrs: ['5.23.01'] },
+];
+const C9_SUBY = [300, 440, 580];   // the three sub-suppliers of the chain picture
+// Five agreements in the contract, as rows to point at in the first quick check.
+const C9_Q1 = ['beveiligingseisen uit de offerteaanvraag', 'aantonen: opzet, bestaan en werking', 'een externe audit is mogelijk',
+  'transparant over kwetsbaarheden en incidenten', 'exit-strategie'];
+const c9_q1Y = i => 262 + i * 68;
+// The five controls as cards for the second quick check: [number, icon, label].
+const C9_Q2 = [['5.19', 'doc', ['eisen bij', 'de inkoop']], ['5.20', 'cert', ['afspraken in', 'het contract']], ['5.21', 'keten', ['keten van', 'toeleveranciers']],
+  ['5.22', 'loep', ['leverancier', 'beoordelen']], ['5.23', 'wolk', ['clouddiensten']]];
+const c9_q2X = i => 104 + i * 284;
+// The six verbs of the cloud policy (5.23.01), with the moment after 'beleid' at which each is named.
+const C9_VERB = [[['inventariseren'], 1.6], [['classificeren'], 3.2], [['selecteren'], 4.5], [['beoordelen'], 5.6], [['managen'], 6.8], [['dienstverlening', 'beëindigen'], 8.6]];
+
+/* ---------- chapter drawing helpers (prefixed c9_; the shared b_ helpers live in ../lib/engine.js) ---------- */
+// The two parties of this chapter, each on its own side (b_party and b_sheet, which started here, live in ../lib/engine.js).
+const c9_org = (p, y = 430) => b_party(p, 200, y, 'overheid', 'organisatie');
+const c9_lev = (p, y = 440) => b_party(p, 1400, y, 'bedrijf', 'leverancier', { lab: 84 });
+// The chain: the organisation, its supplier and three sub-suppliers behind it, with the lines between them.
+// Everything starts hidden; returns { org, lev, main, subs, links }.
+const c9_chain = p => {
+  const line = d => path(p, d, { stroke: COL.dim, 'stroke-width': 3 }, { o: 0 });
+  const main = line('M300 440H550'), links = C9_SUBY.map(y => line(`M692 440C800 440 840 ${y} 976 ${y}`));
+  const org = c9_org(p), lev = b_party(p, 620, 440, 'bedrijf', 'leverancier', { lab: 84 });
+  const subs = C9_SUBY.map((y, k) => {
+    const g = G(p, { o: 0 });
+    g._ic = b_icon(g, 'bedrijf', { x: 1030, y, s: .95 });
+    g._lab = T(g, 'toeleverancier ' + 'ABC'[k], { x: 1084, y: y + 8, size: 21 });
+    return g;
+  });
+  return { org, lev, main, subs, links };
+};
+const c9_chainOn = (c, t0) => [c.org, c.main, c.lev, ...c.links, ...c.subs].forEach(e => show(e, t0, .4));
+
+/* ---------- beats: [id, title, run(m, D), { ask, hold }?] ---------- */
+const BEATS = [
+  ['intro', 'Leveranciers', (m, D) =>
+    b_title(m, D, 'DEEL B · MAATREGELEN VOOR DE ORGANISATIE · HOOFDSTUK 9', 'Leveranciers', 'Inkoop, contract, de keten van toeleveranciers en clouddiensten.')],
+
+  ['vijf', '5.19 tot en met 5.23', (m) => {
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 5.19 TOT EN MET 5.23');
+    // The strip of this chapter: the five controls. All of them have government measures.
+    b_tabs(C9_TABS, .4);
+    const tA = m('alle');
+    C9_CTRL.forEach((c, i) => {
+      const x = 120 + i * 276, y = 226, g = G(p, { o: 0, y: 12 });
+      b_rect(g, x, y, 260, 330, { fill: COL.panel });
+      T(g, c.code, { x: x + 20, y: y + 52, size: 34, fill: COL.iso, weight: 700, font: MONO });
+      c.topic.forEach((str, k) => T(g, str, { x: x + 20, y: y + 92 + k * 27, size: 20 }));
+      tw(g, { o: 1, y: 0 }, .3 + i * .1, .5, out);
+      c.nrs.forEach((nr, k) => show(b_chip(g, x + 20 + (k % 2) * 114, y + 156 + Math.floor(k / 2) * 48, 106, nr, { col: COL.task, fill: COL.task, hgt: 38, size: 16 }), tA + .2 + i * .2 + k * .06));
+      if (c.gone) show(T(g, c.gone, { x: x + 20, y: y + 274, size: 15, fill: COL.dim, font: MONO, o: 0 }), m('verv'));
+    });
+    b_txt(p, 'BRON ONDERWERPEN: NEN-EN-ISO/IEC 27002:2022 · VERKORT WEERGEGEVEN', 120, 596, 1.6, { size: 14, fill: COL.faint, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    b_txt(p, 'samen veertien overheidsmaatregelen', 800, 678, m('veertien'), { size: 27, weight: 600, fill: COL.task });
+  }],
+
+  ['offerte', 'Eisen bij de inkoop', (m) => {
+    const p = panel(0);
+    b_head(p, '5.19.01 · EISEN BIJ DE INKOOP');
+    b_tab(0, .2);
+    b_kop(p, '5.19.01', 'beveiligingseisen bij de inkoop');
+    const tO = m('off'), tB = m('biv'), tR = m('ra');
+    show(c9_org(p), .3); show(c9_lev(p), .5);
+    // The request for quotation travels from the organisation to the supplier; the security requirements are part of it.
+    b_rise(b_sheet(p, 560, 250, 480, 440, 'OFFERTEAANVRAAG · INKOOPEISEN', 3), tO);
+    b_arrow(p, 300, 546, 430, tO + .2); b_arrow(p, 1054, 1300, 430, tO + .9);
+    show(b_box(p, 588, 400, 424, ['informatiebeveiligingseisen'], { col: COL.task, fill: COL.task }), tO + 3.6);
+    ['beschikbaarheid', 'integriteit', 'vertrouwelijkheid'].forEach((str, k) => b_txt(p, str, 800, 512 + k * 36, tB + k * 1.05, { size: 23, fill: COL.task }));
+    // They rest on an explicit risk assessment.
+    show(put(b_matrix(p, 400, 606, 1.2), { o: 0 }), tR);
+    b_txt(p, 'expliciete risicoafweging', 400, 676, tR, { size: 20, fill: COL.dim });
+    show(b_dart(p, 446, 588, 576, 452, { stroke: COL.task }), tR + .4);
+  }],
+
+  ['contract', 'In het contract', (m) => {
+    const p = panel(0);
+    b_head(p, '5.20.01 · EISEN IN HET CONTRACT');
+    b_tab(1, .2);
+    b_kop(p, '5.20.01', 'dezelfde eisen in het contract');
+    const tC = m('con'), eisen = x => b_box(p, x, 400, 424, ['informatiebeveiligingseisen'], { col: COL.task, fill: COL.task });
+    b_rise(b_sheet(p, 250, 260, 480, 380, 'OFFERTEAANVRAAG', 2), .2);
+    show(eisen(278), .5);
+    b_rise(b_sheet(p, 870, 260, 480, 380, 'CONTRACT', 2), .4);
+    // The block of requirements travels from the request into the contract.
+    const copy = put(eisen(898), { x: -620 });
+    show(copy, tC, .3); tw(copy, { x: 0 }, tC + .2, 1, io);
+    b_txt(p, 'expliciet opgenomen', 1110, 694, tC + 1.3, { size: 24, weight: 600, fill: COL.task });
+  }],
+
+  ['voorwaarden', 'Algemene voorwaarden', (m) => {
+    const p = panel(0);
+    b_head(p, '5.20.02 · ALGEMENE VOORWAARDEN');
+    b_kop(p, '5.20.02', 'algemene voorwaarden van de leverancier');
+    const tU = m('uit'), tA = m('aanv');
+    b_rise(b_sheet(p, 330, 250, 480, 440, 'CONTRACT', 2), .3);
+    show(b_box(p, 358, 370, 424, ['beveiligingseisen'], { col: COL.task, fill: COL.task, hgt: 60 }), .6);
+    show(c9_lev(p), .3);
+    // The supplier's own terms come along; where possible they are excluded explicitly.
+    const av = G(p, { o: 0, x: 120 });
+    b_icon(av, 'doc', { x: 1120, y: 410, s: 2.2 });
+    T(av, 'algemene voorwaarden', { x: 1120, y: 502, size: 21, weight: 600, anchor: 'middle' });
+    T(av, 'van de leverancier', { x: 1120, y: 529, size: 19, fill: COL.dim, anchor: 'middle' });
+    tw(av, { o: 1, x: 0 }, .8, .7, out);
+    draw(path(p, 'M1040 474L1200 346', { stroke: COL.task, 'stroke-width': 5 }, { d: 0 }), tU, .5);
+    tw(av, { o: .45 }, tU + .4, .4);
+    b_txt(p, 'waar mogelijk: expliciet uitgesloten', 1120, 600, tU + .3, { size: 22, weight: 600, fill: COL.task });
+    // If needed, additional terms take their place in the contract.
+    show(put(b_caps(p, 'EVENTUEEL', 358, 470), { o: 0 }), tA);
+    const extra = b_box(p, 358, 482, 424, ['aanvullende voorwaarden'], { col: COL.task, fill: COL.task, hgt: 60 });
+    extra.firstChild.setAttribute('stroke-dasharray', '8 6');
+    show(extra, tA);
+  }],
+
+  ['nietuit', 'Als uitsluiten niet kan', (m) => {
+    const p = panel(0);
+    b_head(p, '5.20.02 · ALGEMENE VOORWAARDEN');
+    b_kop(p, '5.20.02', 'als uitsluiten niet mogelijk is');
+    const tB = m('beoord'), tE = m('expl');
+    const av = G(p, { o: 0 });
+    b_icon(av, 'doc', { x: 220, y: 420, s: 2.2 });
+    T(av, 'algemene voorwaarden', { x: 220, y: 512, size: 21, weight: 600, anchor: 'middle' });
+    T(av, 'niet uit te sluiten', { x: 220, y: 539, size: 19, fill: COL.dim, anchor: 'middle' });
+    show(av, .3);
+    // Then the risks are assessed, and it is made explicit what happens with each.
+    b_arrow(p, 312, 408, 420, tB);
+    const gate = G(p, { o: 0, y: 14 });
+    b_rect(gate, 420, 320, 330, 200, { fill: COL.panel, stroke: COL.task, sw: 3 });
+    b_matrix(gate, 585, 388, 1.2);
+    T(gate, 'risico’s beoordeeld', { x: 585, y: 484, size: 24, weight: 600, fill: COL.task, anchor: 'middle' });
+    b_rise(gate, tB + .2);
+    b_txt(p, 'expliciet gemaakt', 870, 290, tE, { size: 24, weight: 600, anchor: 'start' });
+    [['acc', 'welke consequenties geaccepteerd worden', COL.dim, COL.chalk], ['mit', 'welke gemitigeerd zijn', COL.good, COL.good],
+      ['nooit', 'welke voorwaarden nooit geaccepteerd worden', COL.bad, COL.bad]].forEach(([mark, str, col, fill], k) => {
+      show(b_dart(p, 762, 420, 858, 354 + k * 100, { stroke: col }), m(mark));
+      show(b_box(p, 870, 316 + k * 100, 600, [str], { col, fill, hgt: 76, size: 22 }), m(mark));
+    });
+  }],
+
+  ['aantonen', 'Aantonen', (m) => {
+    const p = panel(0);
+    b_head(p, '5.20.03 · AANTONEN');
+    b_kop(p, '5.20.03', 'de leverancier toont aan');
+    const tO = m('obw'), tD = m('derden');
+    show(c9_org(p), .3); show(c9_lev(p), .3);
+    show(put(b_caps(p, 'AFSPRAAK IN HET CONTRACT', 120, 264), { o: 0 }), .5);
+    // The supplier's evidence: all requirements met, in design, existence and operation.
+    b_rise(b_sheet(p, 560, 290, 480, 310, 'BEWIJS VAN DE LEVERANCIER'), tO);
+    b_arrow(p, 1300, 1054, 430, tO + .2); b_arrow(p, 546, 300, 430, tO + .9);
+    ['opzet', 'bestaan', 'werking'].forEach((str, k) => {
+      const g = G(p, { o: 0 }), y = 386 + k * 60;
+      b_tick(g, 608, y, COL.task);
+      T(g, str, { x: 644, y: y + 9, size: 27, weight: 600 });
+      show(g, tO + 2.6 + k * .75);
+    });
+    // It rests on research by independent third parties: their stamp lands on the evidence.
+    show(b_icon(p, 'loep', { x: 1400, y: 640, s: 1.2, o: 0, stroke: COL.task }), tD);
+    b_txt(p, 'onafhankelijke derde', 1400, 716, tD, { size: 21, weight: 600 });
+    const stamp = b_stamp(p, 1180, 650, 'ONAFHANKELIJK ONDERZOCHT', 340);
+    show(stamp, tD + .5, .3); tw(stamp, { x: 850, y: 566 }, tD + 1, .9, io);
+  }],
+
+  ['scope', 'Wat het onderzoek dekt', (m) => {
+    const p = panel(0);
+    b_head(p, '5.20.03 · AANTONEN');
+    b_kop(p, '5.20.03', 'wat het onderzoek dekt');
+    const tS = m('scope'), tK = m('keten'), tJ = m('jaar'), cx = 1320, cy = 440, R = 100;
+    show(b_party(p, 300, 470, 'bedrijf', 'leverancier', { s: 1.3, lab: 84 }), .3);
+    // The research covers the whole contracted service: one frame around the supplier and the chain behind it.
+    const frame = G(p, { o: 0 });
+    b_rect(frame, 130, 290, 1010, 330, { stroke: COL.task });
+    b_caps(frame, 'HET ONDERZOEK DEKT DE GECONTRACTEERDE DIENSTVERLENING', 158, 332, { fill: COL.task });
+    show(frame, tS);
+    [640, 820, 1000].forEach((x, k) => {
+      const g = G(p, { o: 0 });
+      path(g, `M${k ? x - 136 : 362} 470H${x - 44}`, { stroke: COL.dim, 'stroke-width': 3 });
+      b_icon(g, 'bedrijf', { x, y: 470, s: .9 });
+      show(g, tK + k * .3);
+    });
+    b_txt(p, 'toeleveranciers', 820, 554, tK + .3, { size: 22, weight: 600 });
+    b_txt(p, 'met expliciet aandacht voor de toeleveringsketen', 635, 664, tK + 1, { size: 22, weight: 600 });
+    b_txt(p, 'en voor hoe de leverancier zijn eigen leveranciers beheert', 635, 696, tK + 4, { size: 20, fill: COL.dim });
+    // And the supplier shows it again every year.
+    show(b_year(p, cx, cy, R), tJ);
+    const hand = G(p, { x: cx, y: cy, o: 0 });
+    mk('circle', { cx: 0, cy: -R, r: 11, fill: COL.task }, hand);
+    show(hand, tJ + .2, .3); tw(hand, { r: 360 }, tJ + .4, 2.2, io);
+    show(b_chip(p, cx - 100, cy - R - 62, 200, 'aangetoond', { col: COL.task, fill: COL.task, hgt: 38, size: 17, bg: COL.board }), tJ + 2.5);
+    b_txt(p, 'elk jaar opnieuw', cx, cy + R + 60, tJ + .4, { size: 23, weight: 600, fill: COL.task });
+  }],
+
+  ['eigen', 'Zelf onderzoeken', (m) => {
+    const p = panel(0);
+    b_head(p, '5.20.04 · ZELFSTANDIG ONDERZOEK');
+    b_kop(p, '5.20.04', 'de organisatie onderzoekt zelf');
+    const tV = m('val'), tA = m('audit'), tR = m('rest');
+    show(c9_org(p, 380), .3); show(c9_lev(p, 390), .3);
+    // The organisation's own magnifying glass travels to the supplier.
+    draw(path(p, 'M310 380H1290', { stroke: COL.edge, 'stroke-width': 3 }, { d: 0 }), .5, 1.6);
+    const lens = b_icon(p, 'loep', { x: 340, y: 372, s: 1.2, o: 0, stroke: COL.task });
+    show(lens, .5, .3); tw(lens, { x: 1250 }, .7, 1.7, io);
+    b_txt(p, 'zelfstandig onderzoek', 800, 330, .6, { size: 24, weight: 600, fill: COL.task });
+    // Also to check what the supplier reports.
+    b_rise(b_sheet(p, 600, 410, 400, 130, 'RAPPORTAGE VAN DE LEVERANCIER'), tV);
+    const ok = G(p, { o: 0 });
+    b_tick(ok, 644, 500, COL.task);
+    T(ok, 'gevalideerd', { x: 676, y: 508, size: 23, weight: 600, fill: COL.task });
+    show(ok, tV + 1.6);
+    // What makes that possible, and what happens with what remains.
+    show(b_box(p, 120, 606, 600, ['in het contract:', 'een externe audit is mogelijk'], { col: COL.task, fill: COL.task, hgt: 100, size: 23 }), tA);
+    show(put(b_matrix(p, 826, 656, 1.2), { o: 0 }), tR);
+    show(b_box(p, 890, 606, 590, ['restrisico’s: beheerst met de', 'vastgestelde risicomanagementmethodiek'], { hgt: 100, size: 21 }), tR);
+  }],
+
+  ['transparant', 'Transparantie', (m) => {
+    const p = panel(0);
+    b_head(p, '5.20.05 · TRANSPARANTIE');
+    b_kop(p, '5.20.05', 'de leverancier is transparant');
+    const tT = m('tr'), tR = m('reageer');
+    show(c9_org(p, 400), .3); show(c9_lev(p, 410), .3);
+    // Two kinds of news travel from the supplier to the organisation.
+    b_arrow(p, 1300, 300, 540, tT + .2);
+    b_txt(p, 'transparant', 800, 574, tT + .4, { size: 21, weight: 600, fill: COL.task });
+    [[290, ['kwetsbaarheden in de dienstverlening'], 72, tT], [380, ['informatiebeveiligingsincidenten,', 'waaronder datalekken'], 96, m('inc')]].forEach(([y, lines, hgt, t0]) => {
+      const g = put(b_box(p, 520, y, 560, lines, { col: COL.bad, fill: COL.bad, hgt, size: 22 }), { x: 300 });
+      show(g, t0, .3); tw(g, { x: 0 }, t0 + .1, .9, io);
+    });
+    // So that the organisation can respond.
+    b_kick(p, 'PASSEND REAGEREN, ONDER MEER', 120, COL.dim, tR, 636);
+    show(b_box(p, 120, 652, 300, ['rapporteren']), tR + .4);
+    show(b_box(p, 440, 652, 460, ['mitigerende maatregelen nemen']), tR + 2.6);
+  }],
+
+  ['exit', 'Afhankelijkheid en exit', (m) => {
+    const p = panel(0);
+    b_head(p, '5.20.06 · AFHANKELIJKHEID EN EXIT');
+    b_kop(p, '5.20.06', 'afhankelijkheid en exit-strategie');
+    const tA = m('afh'), tE = m('exit');
+    // Before the contract: is the dependence manageable?
+    const pre = G(p, { o: 0, y: 14 });
+    b_caps(pre, 'VÓÓR HET CONTRACT', 120, 292);
+    b_rect(pre, 120, 310, 600, 260, { fill: COL.panel, stroke: COL.task, sw: 3 });
+    b_matrix(pre, 222, 440, 1.5);
+    T(pre, 'is de afhankelijkheid van', { x: 316, y: 420, size: 25, weight: 600, fill: COL.task });
+    T(pre, 'de leverancier beheersbaar?', { x: 316, y: 454, size: 25, weight: 600, fill: COL.task });
+    T(pre, 'bepaald in een risicoafweging', { x: 316, y: 496, size: 20, fill: COL.dim });
+    b_rise(pre, tA);
+    b_arrow(p, 736, 824, 440, tE);
+    // In the contract: the way out, worked out explicitly.
+    const con = b_sheet(p, 840, 310, 620, 260, 'CONTRACT', 2);
+    b_caps(con, 'IN HET CONTRACT', 840, 292);
+    b_caps(con, 'VAST ONDERDEEL', 868, 440, { fill: COL.task, size: 13 });
+    b_rise(con, tE);
+    show(b_box(p, 868, 452, 564, ['exit-strategie, expliciet uitgewerkt'], { col: COL.task, fill: COL.task, hgt: 76 }), tE + .7);
+  }],
+
+  ['q1', 'Controlevraag', () => {
+    // The contract with five agreements, as rows to point at.
+    const p = panel(0);
+    b_head(p, '5.20 · AFSPRAKEN IN HET CONTRACT');
+    b_rise(b_sheet(p, 330, 196, 940, 414, 'CONTRACT MET DE LEVERANCIER'), .3);
+    S.rowsQ = C9_Q1.map((str, i) => {
+      const g = b_box(p, 370, c9_q1Y(i), 860, [str], { hgt: 56, size: 22 });
+      show(g, .7 + i * .1);
+      return g;
+    });
+  }, { ask: done => {
+    const items = S.rowsQ.map((g, i) => ({ el: g, box: [370, c9_q1Y(i), 860, 56], label: C9_Q1[i] }));
+    const wrong = (hint) => () => 'Dat is een andere afspraak. ' + hint;
+    quiz(WIDE, [{
+      id: 'c-contract-1', prompt: ['De leverancier ontdekt een datalek. Welke afspraak zorgt dat de organisatie het hoort?'],
+      build: pickEls(items, 3, '5.20.05: de leverancier is transparant over kwetsbaarheden en incidenten, waaronder datalekken.',
+        wrong('Een datalek melden valt onder transparantie over kwetsbaarheden en incidenten (5.20.05).')),
+    }, {
+      id: 'c-contract-2', prompt: ['De organisatie wil de rapportages zelf laten toetsen. Welke afspraak maakt dat mogelijk?'],
+      build: pickEls(items, 2, '5.20.04: in het contract staat dat een externe audit mogelijk is.',
+        wrong('Zelf laten toetsen kan doordat een externe audit mogelijk is (5.20.04).')),
+    }, {
+      id: 'c-contract-3', prompt: ['Het contract wordt beëindigd. Wat is daarvoor vooraf uitgewerkt?'],
+      build: pickEls(items, 4, '5.20.06: een expliciet uitgewerkte exit-strategie is een vast onderdeel van het contract.',
+        wrong('Voor het beëindigen is de exit-strategie uitgewerkt (5.20.06).')),
+    }], done);
+  } }],
+
+  ['inzicht', 'Inzicht in de keten', (m) => {
+    const p = panel(0);
+    b_head(p, '5.21.02 · DE KETEN VAN TOELEVERANCIERS');
+    b_tab(2, .2);
+    b_kop(p, '5.21.02', 'inzicht in de keten');
+    const tI = m('inz'), tB = m('beoord'), c = c9_chain(p);
+    [c.org, c.main, c.lev].forEach(e => show(e, .3));
+    // Behind the supplier lies a part the organisation cannot see yet.
+    const veil = G(p, { o: 0 });
+    b_rect(veil, 960, 250, 340, 390, { stroke: COL.dim, 'stroke-dasharray': '8 7' });
+    T(veil, '?', { x: 1130, y: 478, size: 96, fill: COL.faint, weight: 600, anchor: 'middle' });
+    show(veil, .6); hide(veil, tI + .2, .4);
+    // Before the agreement the supplier shows it: its own suppliers, and the risks among them.
+    show(put(b_caps(p, 'VÓÓR DE OVEREENKOMST', 120, 264, { fill: COL.task }), { o: 0 }), tI);
+    b_txt(p, 'geeft inzicht', 620, 564, tI + .3, { size: 21, weight: 600, fill: COL.task });
+    c.links.forEach((e, k) => show(e, tI + .5 + k * .3)); c.subs.forEach((g, k) => show(g, tI + .6 + k * .3));
+    b_txt(p, 'SCHEMATISCH', 1300, 664, tI + .8, { size: 15, fill: COL.faint, anchor: 'end', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    show(b_chip(p, 1290, 420, 110, 'risico', { col: COL.bad, fill: COL.bad, hgt: 40, size: 17 }), tI + 2.4);
+    // The organisation judges whether those risks are acceptable.
+    show(put(b_matrix(p, 162, 660, .8), { o: 0 }), tB);
+    show(b_box(p, 120, 626, 440, ['risico’s acceptabel?'], { col: COL.task, fill: COL.task, hgt: 68 }), tB);
+  }],
+
+  ['onverminderd', 'Eisen in de hele keten', (m) => {
+    const p = panel(0);
+    b_head(p, '5.21.03 · DE KETEN VAN TOELEVERANCIERS');
+    b_kop(p, '5.21.03', 'de eisen gelden in de hele keten');
+    const tD = m('door'), tT = m('tenzij'), tU = m('uitg'), c = c9_chain(p), look = { col: COL.task, fill: COL.task, hgt: 40, size: 16 };
+    c9_chainOn(c, .2);
+    show(b_chip(p, 530, 330, 180, 'beveiligingseisen', look), .4);
+    // The requirements travel on, undiminished, to every sub-supplier.
+    show(put(b_caps(p, 'ONVERMINDERD VAN TOEPASSING', 120, 264, { fill: COL.task }), { o: 0 }), tD);
+    const copies = C9_SUBY.map((y, k) => {
+      const g = put(b_chip(p, 1290, y - 20, 100, 'eisen', look), { x: -710, y: 350 - y });
+      show(g, tD + k * .25, .3); tw(g, { x: 0, y: 0 }, tD + .1 + k * .25, 1, io);
+      return g;
+    });
+    // Unless a requirement is not relevant for what that sub-supplier does; then the supplier explains.
+    tw(copies[2], { o: .3 }, tT, .4);
+    b_txt(p, 'eis niet relevant', 1340, 632, tT + .2, { size: 18, fill: COL.dim });
+    b_txt(p, 'voor deze dienst', 1340, 654, tT + .2, { size: 18, fill: COL.dim });
+    b_down(p, 620, 548, 600, tU);
+    show(b_box(p, 320, 612, 600, ['uitgesloten eis: inzichtelijk gemaakt,', 'met een onderbouwing'], { col: COL.task, hgt: 96, size: 21 }), tU + .2);
+  }],
+
+  ['wijzigingen', 'Veranderingen', (m) => {
+    const p = panel(0);
+    b_head(p, '5.21.04 · DE KETEN VAN TOELEVERANCIERS');
+    b_kop(p, '5.21.04', 'veranderingen in de keten');
+    const tW = m('wijz'), tM = m('min'), c = c9_chain(p);
+    c9_chainOn(c, .2);
+    show(put(b_caps(p, 'TIJDENS DE LOOPTIJD', 120, 264, { fill: COL.task }), { o: 0 }), .4);
+    // One sub-supplier is replaced by another.
+    hide(c.subs[1], tW, .4);
+    const neu = G(p, { o: 0 });
+    b_icon(neu, 'bedrijf', { x: 1030, y: 440, s: .95, stroke: COL.task });
+    T(neu, 'toeleverancier D', { x: 1084, y: 448, size: 21, fill: COL.task, weight: 600 });
+    show(neu, tW + .5);
+    show(b_chip(p, 1290, 420, 100, 'nieuw', { col: COL.task, fill: COL.task, hgt: 40, size: 17 }), tW + .7);
+    // The supplier passes the change on, with the risks.
+    const note = put(b_box(p, 290, 294, 330, ['verandering in de keten,', 'met de risico’s'], { col: COL.task, fill: COL.task, hgt: 84, size: 20 }), { x: 260 });
+    show(note, tW + 1.6, .3); tw(note, { x: 0 }, tW + 1.8, .9, io);
+    b_kick(p, 'MINIMAAL', 120, COL.dim, tM, 620);
+    show(b_box(p, 120, 636, 300, ['kwetsbaarheden'], { col: COL.bad, fill: COL.bad, hgt: 60, size: 21 }), tM + .2);
+    show(b_box(p, 440, 636, 600, ['incidenten die de dienstverlening kunnen raken'], { col: COL.bad, fill: COL.bad, hgt: 60, size: 21 }), tM + 1.3);
+  }],
+
+  ['analyse', 'De keten in de risicoanalyse', (m) => {
+    const p = panel(0);
+    b_head(p, '5.21.05 · DE KETEN IN DE RISICOANALYSE');
+    b_kop(p, '5.21.05', 'de keten in de eigen risicoanalyse');
+    const gate = G(p, { o: 0, y: 14 });
+    b_rect(gate, 130, 310, 420, 280, { fill: COL.panel, stroke: COL.task, sw: 3 });
+    b_matrix(gate, 340, 410, 1.6);
+    T(gate, 'risicoanalyse', { x: 340, y: 514, size: 26, weight: 600, fill: COL.task, anchor: 'middle' });
+    T(gate, 'van de organisatie', { x: 340, y: 546, size: 21, fill: COL.dim, anchor: 'middle' });
+    b_rise(gate, .3);
+    b_txt(p, 'ZIE HOOFDSTUK 3 · RISICOMANAGEMENT', 130, 624, 1, { size: 14, fill: COL.faint, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+    b_txt(p, 'houdt rekening met', 680, 300, m('k1') - .6, { size: 23, fill: COL.dim, anchor: 'start' });
+    b_point(p, 0, ['specifieke kwetsbaarheden van elke', 'rechtstreekse leverancier en dienstverlener'], m('k1'), 360, 680);
+    b_point(p, 1, ['de algemene kwaliteit van de producten'], m('k2'), 384, 680);
+    b_point(p, 2, ['de cyberbeveiligingspraktijken van hun leveranciers,', 'met inbegrip van veilige ontwikkelingsprocedures'], m('k3'), 384, 680);
+  }],
+
+  ['beoordelen', 'De proceseigenaar beoordeelt', (m) => {
+    const p = panel(0);
+    b_head(p, '5.22.01 · LEVERANCIER BEOORDELEN');
+    b_tab(3, .2);
+    b_kop(p, '5.22.01', 'de proceseigenaar beoordeelt');
+    const tP = m('pe');
+    // The process owner, with the supplier's evidence (5.20.03) in hand.
+    show(b_role(p, 250, 390, 'proceseigenaar', COL.task), tP);
+    const ev = b_sheet(p, 110, 560, 280, 140, 'BEWIJS LEVERANCIER');
+    [0, 1, 2].forEach(k => b_tick(ev, 150 + k * 44, 654, COL.task));
+    b_rise(ev, tP + .4);
+    draw(path(p, 'M250 552V498 M240 512L250 498L260 512', { stroke: COL.dim, 'stroke-width': 3 }, { d: 0 }), tP + .8, .5);
+    show(put(b_caps(p, 'VERANTWOORDELIJK VOOR', 520, 284), { o: 0 }), tP + .5);
+    [['b1', 'jaarlijks beoordelen of de leverancier aan de eisen voldoet'], ['b2', 'eventuele beveiligingsrisico’s vaststellen'],
+      ['b3', 'mitigerende maatregelen (laten) nemen en restrisico’s accepteren']].forEach(([mark, str], k) => {
+      const y = 300 + k * 110;
+      show(b_dart(p, 312, 390, 508, y + 38), m(mark));
+      show(b_box(p, 520, y, 940, [str], { hgt: 76, size: 22 }), m(mark));
+    });
+  }],
+
+  ['register', 'Registratie', (m) => {
+    const p = panel(0);
+    b_head(p, '5.22.02 · REGISTRATIE');
+    b_kop(p, '5.22.02', 'leveranciers en contracten geregistreerd');
+    const tR = m('reg');
+    // The registration, schematic: every supplier with its contract.
+    const sheet = b_sheet(p, 330, 250, 940, 410, 'LEVERANCIERS EN CONTRACTEN');
+    path(sheet, 'M358 306H1242', { stroke: COL.edge, 'stroke-width': 2 });
+    b_rise(sheet, .3);
+    [...'ABCD'].forEach((ch, i) => {
+      const y = 322 + i * 80, g = G(p, { o: 0 });
+      b_icon(g, 'bedrijf', { x: 388, y: y + 36, s: .6 });
+      T(g, 'leverancier ' + ch, { x: 436, y: y + 44, size: 22 });
+      b_icon(g, 'doc', { x: 760, y: y + 36, s: .75 });
+      T(g, 'contract', { x: 796, y: y + 44, size: 20, fill: COL.dim });
+      mk('rect', { x: 940, y: y + 24, width: 280, height: 11, rx: 3, fill: COL.edge }, g);
+      mk('rect', { x: 940, y: y + 46, width: 190, height: 11, rx: 3, fill: COL.edge }, g);
+      if (i < 3) path(g, `M358 ${y + 78}H1242`, { stroke: COL.edge, 'stroke-width': 1.5 });
+      show(g, tR + i * .25);
+    });
+    show(b_chip(p, 1092, 268, 150, 'actueel', { col: COL.task, fill: COL.task, hgt: 34, size: 16, bg: COL.panel }), tR + 1.4);
+    b_txt(p, 'SCHEMATISCH', 330, 690, .8, { size: 15, fill: COL.faint, anchor: 'start', weight: 700, font: MONO }).setAttribute('letter-spacing', '1.5');
+  }],
+
+  ['cloud', 'Beleid voor clouddiensten', (m) => {
+    const p = panel(0);
+    b_head(p, '5.23.01 · CLOUDDIENSTEN');
+    b_tab(4, .2);
+    b_kop(p, '5.23.01', 'beleid voor clouddiensten');
+    const tB = m('beleid'), tD = m('drie');
+    // The policy: six things it covers, named one by one.
+    const sheet = b_sheet(p, 120, 244, 820, 340, 'BELEID');
+    b_term(sheet, 'Cloud Service Providers', 'cloud-service-providers', { x: 148, y: 328, size: 24, o: 1 });
+    T(sheet, 'afgekort CSP: cloudleveranciers', { x: 148, y: 358, size: 18, fill: COL.dim });
+    b_rise(sheet, tB);
+    C9_VERB.forEach(([lines, dt], k) => show(b_box(p, 148 + (k % 3) * 258, 386 + Math.floor(k / 3) * 84, 244, lines, { hgt: 68, size: 20 }), tB + dt));
+    // Applied, and revised at least once every three years.
+    show(b_box(p, 1000, 262, 300, ['en toegepast'], { col: COL.task, fill: COL.task }), m('toe'));
+    const line = G(p, { o: 0 });
+    path(line, 'M1010 450H1450', { stroke: COL.edge, 'stroke-width': 3 });
+    ['nu', '1', '2', '3 jaar'].forEach((str, k) => {
+      const x = 1010 + k * 146.6;
+      path(line, `M${x} 438V462`, { stroke: COL.dim, 'stroke-width': 3 });
+      T(line, str, { x, y: 494, size: 18, fill: COL.dim, anchor: 'middle', font: MONO });
+    });
+    show(line, tD);
+    [0, 3].forEach((k, n) => show(put(mk('circle', { cx: 1010 + k * 146.6, cy: 450, r: 10, fill: COL.task }, p), { o: 0 }), tD + .5 + n * .9));
+    b_txt(p, 'minimaal eens per drie jaar herzien', 1230, 546, tD + .6, { size: 21, weight: 600, fill: COL.task });
+  }],
+
+  ['ontbinding', 'Ontbinding en wijzigingen', (m) => {
+    // Same picture: two more things the measure asks for, below the policy.
+    const p = S.panel, tW = m('wijz');
+    show(b_box(p, 120, 616, 660, ['in het contract: welke situaties', 'tot ontbinding kunnen leiden'], { col: COL.task, fill: COL.task, hgt: 100, size: 22 }), m('ontb'));
+    show(b_box(p, 820, 616, 300, ['belangrijke wijziging', 'bij de leverancier'], { hgt: 100, size: 21 }), tW);
+    b_arrow(p, 1130, 1170, 666, tW + 1.6);
+    show(b_box(p, 1180, 616, 300, ['risico’s beoordelen,', 'passende maatregelen'], { col: COL.task, fill: COL.task, hgt: 100, size: 21 }), tW + 1.8);
+  }, { hold: true }],   // the lesson waits here: the English term of this picture can be heard before it goes on
+
+  ['q2', 'Controlevraag', () => {
+    // The five controls of this chapter as cards to point at.
+    const p = panel(0);
+    b_head(p, 'DEEL 2 · 5.19 TOT EN MET 5.23');
+    b_tab(-1, .2);
+    b_txt(p, 'de vijf beheersmaatregelen van dit hoofdstuk', 800, 232, .3, { size: 26, fill: COL.dim });
+    S.cards = C9_Q2.map(([nr, icon, lines], i) => {
+      const x = c9_q2X(i), g = b_tile(p, { x, y: 264, w: 256, h: 250, icon, lines, iconY: 112, iconS: 1.05, size: 21 });
+      T(g, nr, { x: x + 128, y: 312, size: 26, fill: COL.task, weight: 700, anchor: 'middle', font: MONO });
+      b_rise(g, .3 + i * .1);
+      return g;
+    });
+  }, { ask: done => {
+    const items = S.cards.map((g, i) => ({ el: g, box: [c9_q2X(i), 264, 256, 250], label: C9_Q2[i][0] + ' ' + C9_Q2[i][2].join(' ') }));
+    const about = ['Dat gaat over de eisen in de offerteaanvraag.', 'Dat gaat over de afspraken in het contract.', 'Dat gaat over de keten van toeleveranciers.',
+      'Dat gaat over het beoordelen van de leverancier.', 'Dat gaat over clouddiensten.'];
+    quiz(WIDE, [{
+      id: 'c-keten-1', prompt: ['De leverancier schakelt een nieuwe onderaannemer in. Waar staat dat hij dat doorgeeft?'],
+      build: pickEls(items, 2, '5.21.04: tijdens de looptijd geeft de leverancier veranderingen in de keten van toeleveranciers door.',
+        i => about[i] + ' Veranderingen in de keten doorgeven staat in 5.21.04.'),
+    }, {
+      id: 'c-keten-2', prompt: ['Het jaarlijkse bewijs van de leverancier is binnen. Waar staat wie het beoordeelt?'],
+      build: pickEls(items, 3, '5.22.01: de proceseigenaar beoordeelt jaarlijks of de leverancier aan de eisen voldoet.',
+        i => about[i] + ' Wie het bewijs beoordeelt, staat in 5.22.01.'),
+    }, {
+      id: 'c-keten-3', prompt: ['Een offerteaanvraag voor een nieuw zaaksysteem. Waar begint de beveiliging?'],
+      build: pickEls(items, 0, '5.19.01: informatiebeveiligingseisen horen bij de inkoopeisen in de offerteaanvraag.',
+        i => about[i] + ' Het begint eerder, bij de inkoopeisen: 5.19.01.'),
+    }], done);
+  } }],
+
+  ['wrap', 'Samenvatting', (m) => {
+    const p = panel(0);
+    b_head(p, 'SAMENVATTING');
+    hide(S.tabsG, 0, .4);
+    b_wrap(p, [
+      ['Beveiligingseisen in offerteaanvraag en contract.', 'Gebaseerd op een expliciete risicoafweging; algemene voorwaarden waar mogelijk uitgesloten.', 'w1'],
+      ['Aantonen en zelf controleren.', 'De leverancier toont jaarlijks opzet, bestaan en werking aan; een externe audit is mogelijk.', 'w2'],
+      ['De eisen gelden in de hele keten.', 'Inzicht vooraf, veranderingen tijdens de looptijd, en de keten in de eigen risicoanalyse.', 'w3'],
+      ['De proceseigenaar beoordeelt; voor de cloud is er beleid.', 'Jaarlijkse beoordeling, een actuele registratie, en cloudbeleid dat elke drie jaar wordt herzien.', 'w4'],
+    ], m);
+  }],
+
+  ['final1', 'Oefenronde 1', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-stellingen', prompt: ['Klopt het, of klopt het niet?'],
+    build: grid([
+      { parts: ['Beveiligingseisen uit de offerteaanvraag komen ook expliciet in het contract.'], ans: ['k'], why: 'Zo staat het in 5.20.01. De eisen zelf zijn gebaseerd op een expliciete risicoafweging.' },
+      { parts: ['Een uitgewerkte exit-strategie is een vast onderdeel van het contract.'], ans: ['k'], why: 'En vóór het contract bepaalt een risicoafweging of de afhankelijkheid beheersbaar is.' },
+      { parts: ['Met een rapport van een derde hoeft de organisatie zelf niets meer te onderzoeken.'], ans: ['n'], why: 'De organisatie doet ook zelfstandig onderzoek, mede om de rapportages te valideren.' },
+      { parts: ['De beveiligingseisen gelden voor de leverancier, niet voor zijn toeleveranciers.'], ans: ['n'], why: 'Ze gelden onverminderd voor de keten van toeleveranciers, tenzij een eis daar niet relevant is.' },
+      { parts: ['De CISO beoordeelt jaarlijks of de leverancier aan de eisen voldoet.'], ans: ['n'], why: 'Dat is de verantwoordelijkheid van de proceseigenaar.' },
+    ], KN, { multi: false, text: true }),
+  }], done, 'Oefenronde 1 van 2') }],
+
+  ['final2', 'Oefenronde 2', () => { panel(0); }, { ask: done => quiz(SCREEN, [{
+    id: 'p-voorwaarden', prompt: ['De algemene voorwaarden van de leverancier zijn niet uit te sluiten. Wat dan?'],
+    build: choice([['Dan gelden ze zonder meer.'], ['De risico’s worden beoordeeld en expliciet gemaakt.'], ['Dan gaat het contract niet door.']], 1,
+      'De risico’s worden beoordeeld. Expliciet is wat wordt geaccepteerd, wat is gemitigeerd en wat nooit wordt geaccepteerd.',
+      ['Niet zonder meer: de risico’s worden beoordeeld en expliciet gemaakt.', null,
+        'Dat zegt de maatregel niet: de risico’s worden beoordeeld en expliciet gemaakt.']),
+  }, {
+    id: 'p-inzicht', prompt: ['Wat geeft de leverancier vóór het afsluiten van de overeenkomst?'],
+    build: choice([['Inzicht in zijn keten van toeleveranciers en de risico’s daarin.'], ['Een lijst van al zijn klanten.'], ['Niets; dat volgt tijdens de looptijd.']], 0,
+      'Vooraf geeft de leverancier inzicht in de keten van toeleveranciers en de risico’s; de organisatie beoordeelt of die acceptabel zijn.',
+      [null, 'Daar vraagt de maatregel niet om. Het gaat om inzicht in de keten van toeleveranciers en de risico’s daarin.',
+        'Tijdens de looptijd geeft hij veranderingen door. Vooraf geeft hij inzicht in de keten en de risico’s.']),
+  }, {
+    id: 'p-cloud', prompt: ['Hoe vaak wordt het beleid voor cloudleveranciers herzien?'],
+    build: choice([['Elke maand.'], ['Alleen na een incident.'], ['Minimaal eens per drie jaar.']], 2,
+      'Het beleid wordt minimaal eens per drie jaar herzien.',
+      ['Zo vaak vraagt de maatregel het niet: minimaal eens per drie jaar.',
+        'Niet alleen dan: het beleid wordt minimaal eens per drie jaar herzien.', null]),
+  }], done, 'Oefenronde 2 van 2 · vraag') }],
+
+  ['finish', 'Afgerond', () => { panel(0); }, { ask: finishCard }],
+].map(([id, title, run, extra]) => ({ id, title, run, ...extra }));
+
+boot();
+</script>
+</body>
+</html>
