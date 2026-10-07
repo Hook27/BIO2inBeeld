@@ -57,6 +57,14 @@ document.body.insertAdjacentHTML('afterbegin', `<div id="frame">
       <p class="help-close">Druk op <kbd>Esc</kbd> om te sluiten.</p>
     </div>
   </div>
+  <div class="shot" id="shot" hidden role="dialog" aria-label="Beeld opslaan">
+    <h2>Beeld opslaan</h2>
+    <p>Het beeld zoals het nu staat, zonder achtergrond en bedieningsbalk.</p>
+    <div class="shot-row"><span>Voor een lichte dia<small>transparant, kleuren omgezet</small></span><button class="btn quiet" data-shot="png licht">PNG</button><button class="btn quiet" data-shot="svg licht">SVG</button></div>
+    <div class="shot-row"><span>Met donkere achtergrond<small>de kleuren van het boek</small></span><button class="btn quiet" data-shot="png donker">PNG</button><button class="btn quiet" data-shot="svg donker">SVG</button></div>
+    <p class="shot-note" id="shotNote" aria-live="polite"></p>
+    <button class="btn quiet" id="shotClose">Sluiten<kbd>Esc</kbd></button>
+  </div>
   <p class="sound-note" id="soundNote" hidden>Het geluid kon niet worden afgespeeld. De les gaat verder met de tekst in beeld.</p>
   <button class="cover" id="cover"><div>
     <p class="cover-k" id="coverK"></p>
@@ -85,6 +93,9 @@ document.body.insertAdjacentHTML('afterbegin', `<div id="frame">
     <div class="step" id="stepName"></div>
     <button class="icon txt" id="bHelp" aria-label="Sneltoetsen (?)" title="Sneltoetsen (?)">?</button>
     <button class="icon cc" id="bCC" aria-pressed="false" aria-label="Ondertiteling (C)" title="Ondertiteling (C)">CC</button>
+    <button class="icon" id="bShot" hidden aria-label="Beeld opslaan (B)" title="Beeld opslaan (B)">
+      <svg viewBox="0 0 18 18"><path d="M8 1h2v8.2l2.8-2.8 1.4 1.4L9 13 3.8 7.8l1.4-1.4L8 9.2zM2 15h14v2H2z"/></svg>
+    </button>
     <button class="icon" id="bFull" aria-label="Volledig scherm">
       <svg viewBox="0 0 18 18"><path d="M1 1h6v2H3v4H1zM11 1h6v6h-2V3h-4zM1 11h2v4h4v2H1zM15 11h2v6h-6v-2h4z"/></svg>
     </button>
@@ -1983,6 +1994,7 @@ document.addEventListener('keydown', e => {
   // A held key acts once: its repeats must not press the button that the first press brought up.
   if (e.repeat && (k === 'Enter' || k === ' ')) { e.preventDefault(); return; }
   if (!$('help').hidden) { if (k === 'Escape' || k === '?') { e.preventDefault(); toggleHelp(); } return; }
+  if (!$('shot').hidden) { if (k === 'Escape' || k === 'b' || k === 'B') { e.preventDefault(); toggleShot(); } return; }
   if (e.target.matches?.('input')) {        // typing an answer: only Enter (check) and Escape (leave the box) are ours
     if (k === 'Enter' && P.keys) { e.preventDefault(); P.keys(e); }
     else if (k === 'Escape') e.target.blur();
@@ -2000,6 +2012,7 @@ document.addEventListener('keydown', e => {
   else if (k === 'Home') restart();
   else if (k === 'c' || k === 'C') setCaptions(!captions);
   else if (k === 'f' || k === 'F') toggleFull();
+  else if ((k === 'b' || k === 'B') && SHOT) toggleShot();
   else used = false;
   if (used) e.preventDefault();
 });
@@ -2009,6 +2022,128 @@ $('bHelp').onclick = toggleHelp;
 const fit = () => document.documentElement.style.setProperty('--k', Math.min(innerWidth / 1640, innerHeight / 1000));
 addEventListener('resize', fit);
 fit();
+
+/* ---------- saving the picture ---------- */
+// For use on a slide: the picture on the stage as a drawing of its own, cut to its content, without the board, the
+// raster and the grain, without what is hidden, and without what only means something in the player (the rings to
+// point at, the speaker beside an English term). 'licht' turns the colours round for a light slide and leaves the
+// ground transparent; 'donker' keeps the colours of the book on a dark card.
+// The button is off unless the page was once opened with ?beeld=1 (?beeld=0 turns it off again): readers do not need
+// it. tools/<book>/export_images.py calls shotSvg and shotPng for every beat.
+let SHOT = false;
+try {
+  const q = new URLSearchParams(location.search).get('beeld');
+  if (q !== null) localStorage.setItem('beeld', q === '0' ? '0' : '1');
+  SHOT = localStorage.getItem('beeld') === '1';
+} catch {}
+// Lightness on the board -> lightness on white. A colour keeps its hue; a strong accent is darkened until it reads on white.
+const SHOT_L = [[0, 1], [.09, 1], [.13, .955], [.21, .8], [.36, .57], [.58, .38], [.82, .14], [1, .04]];
+function lightColor(c) {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(c || '');
+  if (!m) return c;
+  const hex = m[1].length === 3 ? [...m[1]].map(x => x + x).join('') : m[1];
+  const [r, g, b] = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+  const s = d ? d / (1 - Math.abs(2 * l - 1)) : 0, S = Math.min(1, s * 1.35);
+  const hue = !d ? 0 : max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  const k = SHOT_L.findIndex(p => p[0] >= l), [l0, v0] = SHOT_L[Math.max(0, k - 1)], [l1, v1] = SHOT_L[k];
+  let L = l1 === l0 ? v1 : v0 + (v1 - v0) * (l - l0) / (l1 - l0);
+  const rgb = L => {
+    const C = (1 - Math.abs(2 * L - 1)) * S, x = C * (1 - Math.abs(hue % 2 - 1)), m0 = L - C / 2;
+    const [R, G, B] = hue < 1 ? [C, x, 0] : hue < 2 ? [x, C, 0] : hue < 3 ? [0, C, x] : hue < 4 ? [0, x, C] : hue < 5 ? [x, 0, C] : [C, 0, x];
+    return [R + m0, G + m0, B + m0];
+  };
+  const lum = v => v.reduce((a, c, i) => a + [.2126, .7152, .0722][i] * (c <= .03928 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4), 0);
+  if (s > .2 && l > .5) while (L > .2 && 1.05 / (lum(rgb(L)) + .05) < 4.5) L -= .01;
+  return '#' + rgb(L).map(v => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0')).join('');
+}
+// The first family of a font list that this computer has: a slide program wants one name, not a list.
+const SHOT_FONT = {};
+function firstFont(list) {
+  if (SHOT_FONT[list]) return SHOT_FONT[list];
+  const width = f => { ctx2d.font = `40px ${f}`; return ctx2d.measureText('Wijziging 8.24.05 mgq').width; };
+  const names = list.split(',').map(f => f.trim().replace(/^["']|["']$/g, ''));
+  const real = names.find(f => !/^(serif|sans-serif|monospace)$/.test(f) && (width(`"${f}",serif`) !== width('serif') || width(`"${f}",monospace`) !== width('monospace')));
+  return (SHOT_FONT[list] = real || names[names.length - 1]);
+}
+// The picture as it stands now: { text (an SVG file), w, h }, or null when there is nothing to see. scale: pixels per unit.
+function shotSvg(theme = 'licht', scale = 1) {
+  const g = scene.cloneNode(true);
+  g.removeAttribute('id');
+  g.querySelectorAll('.ring, .say-ring, .say-ico, .qlayer').forEach(e => e.remove());
+  for (const e of [...g.querySelectorAll('*')]) {
+    if (!g.contains(e)) continue;                             // went with a hidden parent
+    if (+(e.getAttribute('opacity') ?? 1) < .02 || e.style.visibility === 'hidden') { e.remove(); continue; }
+    if (e.getAttribute('opacity') === '1') e.removeAttribute('opacity');
+    // a line that has drawn itself is a plain line (pathLength is not understood everywhere)
+    if (e.hasAttribute('pathLength') && +e.getAttribute('stroke-dashoffset') < .002) ['pathLength', 'stroke-dasharray', 'stroke-dashoffset'].forEach(a => e.removeAttribute(a));
+    if (e.tagName === 'text') e.setAttribute('xml:space', 'preserve');
+    if (e.hasAttribute('font-family')) e.setAttribute('font-family', firstFont(e.getAttribute('font-family')));
+    ['class', 'style', 'tabindex', 'role', 'aria-label'].forEach(a => e.removeAttribute(a));
+    if (theme === 'licht') for (const a of ['fill', 'stroke', 'stop-color']) if (e.hasAttribute(a)) e.setAttribute(a, lightColor(e.getAttribute(a)));
+  }
+  for (let empty; (empty = [...g.querySelectorAll('g')].filter(e => !e.firstChild)).length;) empty.forEach(e => e.remove());
+  const svg = mk('svg', { viewBox: '0 0 1600 900', width: 1600, height: 900 }), box = document.createElement('div');
+  box.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden';
+  svg.appendChild(g);
+  box.appendChild(svg);
+  document.body.appendChild(box);                             // measuring needs the drawing in the page for a moment
+  const b = g.getBBox();
+  box.remove();
+  if (!b.width || !b.height) return null;
+  const pad = theme === 'donker' ? 30 : 14;
+  const x = Math.floor(b.x - pad), y = Math.floor(b.y - pad), w = Math.ceil(b.width + 2 * pad), h = Math.ceil(b.height + 2 * pad);
+  if (theme === 'donker') svg.insertBefore(mk('rect', { x, y, width: w, height: h, rx: 14, fill: COL.board }), g);
+  svg.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
+  svg.setAttribute('width', w * scale);
+  svg.setAttribute('height', h * scale);
+  return { text: '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(svg), w, h };
+}
+// The same picture as a canvas, scale times as large (2: a full stage is 3200 pixels wide). Null when there is nothing to see.
+async function shotPng(theme = 'licht', scale = 2) {
+  const s = shotSvg(theme, scale);
+  if (!s) return null;
+  const img = new Image(), url = URL.createObjectURL(new Blob([s.text], { type: 'image/svg+xml' }));
+  img.src = url;
+  await img.decode();
+  const c = document.createElement('canvas');
+  c.width = s.w * scale;
+  c.height = s.h * scale;
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  URL.revokeObjectURL(url);
+  return c;
+}
+const shotName = (theme, ext) => `h${String(CHAPTER.number).padStart(2, '0')}-s${String(P.i + 1).padStart(2, '0')}-${BEATS[P.i].id}-${theme}.${ext}`;
+async function shotSave(kind, theme) {
+  let blob = null;
+  if (kind === 'svg') { const s = shotSvg(theme); blob = s && new Blob([s.text], { type: 'image/svg+xml' }); }
+  else { const c = await shotPng(theme); blob = c && await new Promise(done => c.toBlob(done, 'image/png')); }
+  if (!blob) { $('shotNote').textContent = 'Er staat nu niets in beeld om op te slaan.'; return; }
+  const a = document.createElement('a'), name = shotName(theme, kind);
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  $('shotNote').textContent = `Opgeslagen als ${name}`;
+}
+// Opening the panel pauses the lesson; closing it goes on if the lesson was playing.
+let shotResume = false;
+function toggleShot() {
+  if (!SHOT) return;
+  const open = $('shot').hidden;
+  $('shot').hidden = !open;
+  $('frame').classList.toggle('shot-open', open);   // the note 'Gepauzeerd' would lie over the picture
+  $('shotNote').textContent = '';
+  if (open) { shotResume = P.playing; if (P.playing) setPlaying(false); }
+  else if (shotResume) setPlaying(true);
+}
+if (SHOT) {
+  $('bShot').hidden = false;
+  $('bShot').onclick = toggleShot;
+  $('shotClose').onclick = toggleShot;
+  $('shot').addEventListener('click', e => { const k = e.target.dataset.shot; if (k) shotSave(...k.split(' ')); });
+  document.querySelector('#help dl').insertAdjacentHTML('beforeend', '<dt><kbd>B</kbd></dt><dd>Beeld opslaan</dd>');
+}
 
 // Start the lesson once the chapter page has defined CHAPTER and BEATS.
 // ?beat=N&t=S opens a paused frame, for reviewing a single moment.
